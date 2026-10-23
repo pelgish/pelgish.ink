@@ -19,13 +19,32 @@ def check_blank_home(html)
     check(html.include?('rel="canonical"') && html.include?('class="site-header"'), "Home shell missing")
 end
 
+# The redirect has only nonvisual metadata/scripts and a genuinely empty body.
+def random_targets(html)
+    check(html.match?(/\A<!doctype html>\s*<html\b/i) && html.rstrip.end_with?("</html>"),
+          "Random page must be a complete HTML document")
+    check(html[/<body>(.*?)<\/body>/m, 1]&.strip == "", "Random page body must be empty without JS")
+    check(html.scan(/<([a-z][a-z0-9-]*)\b/i).flatten.sort ==
+          %w[body head html link meta script script title].sort,
+          "Random page contains visible shell, fallback, or unnecessary resources")
+    check(html.include?('<meta charset="utf-8">') &&
+          html.scan(/<script\b[^>]*src=/).length == 1 &&
+          html.include?('/assets/js/random-haiku.js" defer>'),
+          "Random page must load only its redirect script")
+    canonical = html[/rel="canonical" href="([^"]+)"/, 1]
+    check(canonical && URI(canonical).path.delete_prefix("/preview") == "/haiku/random",
+          "Random canonical must be slashless")
+    JSON.parse(html[/<script id="haiku-targets" type="application\/json">(.*?)<\/script>/m, 1])
+end
+
 # Use the same configuration as the real site, with temporary source/output paths.
-def build(source)
+def build(source, options = {})
     destination = File.join(source, "_site")
     config = Jekyll.configuration(
         "source" => source,
         "destination" => destination,
-        "quiet" => true
+        "quiet" => true,
+        **options
     )
     Jekyll::Site.new(config).process
     destination
@@ -331,11 +350,28 @@ Dir.mktmpdir("pelgish-check-") do |source|
     %w[_config.yml _plugins _layouts assets index.md CNAME].each do |path|
         FileUtils.cp_r(File.join(root, path), source)
     end
-    FileUtils.mkdir_p(File.join(source, "content"))
+    FileUtils.mkdir_p(File.join(source, "content/haiku"))
+    structural_source = File.join(source, "content/haiku/_random.md")
+    FileUtils.cp(File.join(root, "content/haiku/_random.md"), structural_source)
+    structural_bytes = File.binread(structural_source)
     output = build(source)
     check_blank_home(File.read(File.join(output, "index.html")))
     check(!File.exist?(File.join(root, "index.html")), "Duplicate root source")
     check(!File.exist?(File.join(output, "index.md")), "Raw home Markdown leaked")
+    random_path = File.join(output, "haiku/random.html")
+    empty_random = File.read(random_path)
+    check(random_targets(empty_random) == [], "Empty random page must exclude itself and stay blank")
+    check(!File.exist?(File.join(output, "haiku/_random.html")) &&
+          !File.exist?(File.join(output, "content")), "Underscore source leaked or ignored its permalink")
+    check(!frontmatter(structural_source).key?("published_timestamp"), "Structural page needs no publication timestamp")
+
+    # Native underscore discovery and URL serialization also work with exactly one target.
+    single = File.join(source, "content/haiku/only.md")
+    File.write(single, "---\npublished: true\npermalink: '/elsewhere/one two&\"three\"<end'\n---\nOnly body.\n")
+    build(source)
+    check(random_targets(File.read(random_path)) == ["/elsewhere/one%20two&%22three%22%3Cend"],
+          "Single overridden target was not safely encoded/serialized")
+    File.unlink(single)
 
     # Markdown hard breaks must become actual br elements, with separate stanzas.
     fixtures = {
@@ -344,15 +380,19 @@ Dir.mktmpdir("pelgish-check-") do |source|
         "draft" => "---\ntitle: 'Unpublished fixture'\nlayout: prose\n---\nDraft body.\n",
         "explicit-draft" => "---\ntitle: 'Explicit draft'\npublished: false\n---\nDraft body.\n",
         "stable" => "---\ntitle: 'Stable URL'\npermalink: /custom/path\ncolor_scheme: grapevine\nreading_theme: paper\n---\nStable body.\n",
-        "haiku/haiku1" => "---\ntitle: 'Haiku fixture'\nlayout: poetry\n---\nFixture body.\n",
+        "haiku/haiku1" => "---\ntitle: 'Haiku <script> & fixture'\nlayout: poetry\n---\nFixture body.\n",
         "haiku/20260620-001" => "---\nlayout: poetry\n---\nUntitled fixture body.\n",
         "haiku/nested/haiku1" => "---\ntitle: 'Nested fixture'\nlayout: poetry\n---\nNested body.\n",
+        "haiku/override" => "---\ntitle: 'Overridden haiku'\npermalink: /elsewhere/verse.html\n---\nOverride body.\n",
+        "haiku/draft" => "---\ntitle: 'Haiku draft'\npublished: false\n---\nDraft haiku body.\n",
+        "not-haiku" => "---\ntitle: 'Not a haiku'\npermalink: /haiku/not-a-haiku\n---\nOther body.\n",
         "html-override" => "---\ntitle: 'HTML override'\npermalink: /custom/page.html\n---\nHTML body.\n",
         "slash-override" => "---\ntitle: 'Slash override'\npermalink: /custom/slash/\n---\nSlash body.\n"
     }
     urls = fixtures.keys.to_h { |name| [name, "/#{name}"] }.merge(
         "stable" => "/custom/path", "html-override" => "/custom/page",
-        "slash-override" => "/custom/slash"
+        "slash-override" => "/custom/slash", "haiku/override" => "/elsewhere/verse",
+        "not-haiku" => "/haiku/not-a-haiku"
     )
     # Native Jekyll pages write HTML backing files for extensionless permalinks.
     output_path = lambda do |destination, name|
@@ -445,6 +485,14 @@ Dir.mktmpdir("pelgish-check-") do |source|
 
             preview_index = request.call(port, "/").body
             check_blank_home(preview_index)
+            random_response = request.call(port, "/haiku/random")
+            # Jekyll's development server injects a nonvisual LiveReload script.
+            preview_random = random_response.body.sub(/<script>\s*document\.write\(.*?livereload\.js.*?<\/script>/m, "")
+            check(random_response.code == "200" && random_response["location"].nil? &&
+                  random_targets(preview_random) == [],
+                  "Draft preview must serve random page without draft targets")
+            check(request.call(port, "/haiku/random.html").body == random_response.body,
+                  "Random slashless route must match its HTML backing")
             urls.each_value do |path|
                 response = request.call(port, path)
                 check(response.code == "200" && response["location"].nil? &&
@@ -475,7 +523,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     destinations.each { |destination| FileUtils.rm_rf(destination) }
     logs.each { |log| File.unlink(log) }
     puts "PASS: owned LiveReload collision fails visibly; parallel HTTP/draft previews use derived and explicit LiveReload ports"
-    published_names = fixtures.keys - %w[draft explicit-draft]
+    published_names = fixtures.keys - %w[draft explicit-draft haiku/draft]
     published_names.each do |name|
         publication(publisher, [File.join(source, "content", "#{name}.md")], source)
     end
@@ -489,6 +537,18 @@ Dir.mktmpdir("pelgish-check-") do |source|
     index = File.read(File.join(output, "index.html"))
     prose = File.read(File.join(output, "prose.html"))
     poem = File.read(File.join(output, "poem.html"))
+
+    # Random targets follow source membership, publication, and generated URLs.
+    random = File.read(random_path)
+    expected_targets = published_names.select { |name| name.start_with?("haiku/") }.map { |name| urls.fetch(name) }
+    check(random_targets(random).sort == expected_targets.sort, "Random page targets differ from published source haikus")
+    check(!File.exist?(File.join(output, "haiku/random")), "Random route must use HTML backing")
+    build(source, "baseurl" => "/preview", "unpublished" => true)
+    prefixed = File.read(random_path)
+    check(random_targets(prefixed).sort == expected_targets.map { |url| "/preview#{url}" }.sort &&
+          prefixed.include?('src="/preview/assets/js/random-haiku.js"'),
+          "Baseurl/draft preview changed random membership or omitted URL prefix")
+    output = build(source)
 
     # Check the blank home, content URLs, layouts, and shared shell independently.
     check(!File.exist?(File.join(output, "writing")), "Stale writing-prefix output survived rebuild")
@@ -542,9 +602,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
-    %w[draft explicit-draft].each do |name|
+    %w[draft explicit-draft haiku/draft].each do |name|
         check(!File.exist?(output_path.call(output, name)), "Draft page leaked: #{name}")
     end
+    check(File.binread(structural_source) == structural_bytes, "Structural redirect was edited by publication tests")
 
     # Unpublication deletes persisted fields and removes an already-built public URL.
     path = File.join(source, "content/prose.md")
@@ -582,6 +643,34 @@ Dir.mktmpdir("pelgish-check-") do |source|
         File.unlink(invalid_scheme)
     end
 
+    # Reserved route aliases must fail instead of silently overwriting the redirect.
+    collision = File.join(source, "content/haiku/collision.md")
+    ["/haiku/random", "/haiku/random.html", "/haiku/random/", "/haiku/random/index.html"].each do |permalink|
+        File.write(collision, "---\npublished: true\npermalink: #{permalink}\n---\nCollision.\n")
+        begin
+            build(source)
+            raise "Reserved random route was overwritten"
+        rescue Jekyll::Errors::FatalException => error
+            check(error.message.include?("/haiku/random is reserved"), "Missing reserved-route error")
+        ensure
+            File.unlink(collision)
+        end
+    end
+    ["haiku/random", "haiku/random.html", "haiku/random/index.html"].each do |relative_path|
+        collision = File.join(source, relative_path)
+        FileUtils.mkdir_p(File.dirname(collision))
+        File.write(collision, "Static collision")
+        begin
+            build(source)
+            raise "Static file occupied reserved random route"
+        rescue Jekyll::Errors::FatalException => error
+            check(error.message.include?("/haiku/random is reserved"), "Missing static collision error")
+        ensure
+            File.unlink(collision)
+            FileUtils.rmdir(File.dirname(collision)) if relative_path.end_with?("/index.html")
+        end
+    end
+
     # Bare Markdown must fail clearly rather than copying a draft as a public asset.
     File.write(File.join(source, "content/bare.md"), "Private draft without frontmatter\n")
     begin
@@ -593,7 +682,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
 end
 
-puts "PASS: empty index, prose, verse, themes, nested/default/override URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
+puts "PASS: blank random redirect, underscore discovery, published-only targets, route collisions, empty index, prose, verse, themes, URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
 
 # Verify the actual palette tokens against WCAG text/control contrast thresholds.
 css = File.read(File.join(root, "assets/css/style.css"))

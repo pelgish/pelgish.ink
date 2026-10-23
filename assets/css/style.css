@@ -172,6 +172,19 @@ h1 {
     margin: 0 0 1.3em;
 }
 
+.prose .writing-body {
+    line-height: 1.6;
+}
+
+.prose .writing-body p {
+    font-size: 0.95rem;
+    margin: 0 0 1em;
+}
+
+.prose .writing-body > p {
+    text-indent: 1.5em;
+}
+
 .poetry .writing-body {
     line-height: 1.65;
 }

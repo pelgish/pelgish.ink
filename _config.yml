@@ -25,6 +25,9 @@ kramdown:
     hard_wrap: false
 strict_front_matter: true
 
+include:
+    - content/haiku/_random.md
+
 exclude:
     - README.md
     - Gemfile
