@@ -8,11 +8,14 @@
     --link: #48483A;
     --rule: #74776B;
     --accent: #A28F9D;
+    /* Darker grapevine accent for readable hover text on the light background. */
+    --accent-link: #755E70;
     --dark-background: #151C17;
     --dark-foreground: #F3F5F0;
     --dark-heading: #F3F5F0;
     --dark-muted: #A28F9D;
     --dark-link: #F3F5F0;
+    --dark-accent-link: #A28F9D;
 }
 
 /* Shared appearance wiring also works for future palettes with dark tokens. */
@@ -23,6 +26,7 @@
     --heading: var(--dark-heading);
     --muted: var(--dark-muted);
     --link: var(--dark-link);
+    --accent-link: var(--dark-accent-link);
 }
 
 /* System preference remains useful without JavaScript or a page hint. */
@@ -34,6 +38,7 @@
         --heading: var(--dark-heading);
         --muted: var(--dark-muted);
         --link: var(--dark-link);
+        --accent-link: var(--dark-accent-link);
     }
 }
 
@@ -57,13 +62,13 @@ body {
     padding: 0 max(1rem, calc((100% - 42rem) / 2));
 }
 
-a {
+a, a:visited, a:hover, a:focus, a:active {
     color: var(--link);
-    text-underline-offset: 0.2em;
+    text-decoration: none;
 }
 
 a:hover {
-    text-decoration-thickness: 0.15em;
+    color: var(--accent-link);
 }
 
 :focus-visible {
@@ -96,11 +101,29 @@ button, input, select, textarea {
     color: var(--foreground);
     cursor: pointer;
     min-height: 44px;
+    min-width: 44px;
     padding: 0.25rem 0.75rem;
 }
 
 #appearance-toggle:hover {
-    text-decoration: underline;
+    color: var(--accent-link);
+}
+
+#appearance-toggle svg {
+    fill: currentColor;
+    height: 1.1em;
+    width: 1.1em;
+    vertical-align: middle;
+}
+
+/* The visible glyph represents the next action, not the current mode. */
+.appearance-sun,
+:root[data-appearance="dark"] .appearance-moon {
+    display: none;
+}
+
+:root[data-appearance="dark"] .appearance-sun {
+    display: inline;
 }
 
 main {
@@ -120,7 +143,7 @@ h1 {
     margin: 0 0 1.5rem;
 }
 
-.kind, .site-footer, .writing-list p {
+.kind {
     color: var(--muted);
 }
 
@@ -141,20 +164,6 @@ h1 {
     margin-bottom: 1.8em;
 }
 
-.writing-list {
-    list-style: none;
-    padding: 0;
-}
-
-.writing-list li {
-    margin-bottom: 1.5rem;
-}
-
-.writing-list p {
-    font-size: 0.95rem;
-    margin: 0.25rem 0 0;
-}
-
 blockquote {
     border-left: 3px solid var(--rule);
     margin-left: 0;
@@ -170,12 +179,6 @@ pre {
     overflow-x: auto;
     padding: 1rem;
     border: 1px solid var(--rule);
-}
-
-.site-footer {
-    border-top: 1px solid var(--rule);
-    font-size: 0.85rem;
-    padding: 1.5rem 0;
 }
 
 .skip-link {

@@ -13,6 +13,12 @@ def check(condition, message)
     raise message unless condition
 end
 
+# Home retains its shell but never enumerates writing, including draft previews.
+def check_blank_home(html)
+    check(html[/<main\b[^>]*>(.*?)<\/main>/m, 1]&.strip == "", "Home main must be empty")
+    check(html.include?('rel="canonical"') && html.include?('class="site-header"'), "Home shell missing")
+end
+
 # Use the same configuration as the real site, with temporary source/output paths.
 def build(source)
     destination = File.join(source, "_site")
@@ -322,12 +328,14 @@ end
 puts "PASS: setup help/errors, missing prerequisites, opt-in/unsupported systems, local locked Bundler, idempotence, and failure propagation"
 
 Dir.mktmpdir("pelgish-check-") do |source|
-    %w[_config.yml _plugins _layouts assets index.html CNAME].each do |path|
+    %w[_config.yml _plugins _layouts assets index.md CNAME].each do |path|
         FileUtils.cp_r(File.join(root, path), source)
     end
     FileUtils.mkdir_p(File.join(source, "content"))
     output = build(source)
-    check(File.read(File.join(output, "index.html")).include?("No writing published yet."), "Missing empty state")
+    check_blank_home(File.read(File.join(output, "index.html")))
+    check(!File.exist?(File.join(root, "index.html")), "Duplicate root source")
+    check(!File.exist?(File.join(output, "index.md")), "Raw home Markdown leaked")
 
     # Markdown hard breaks must become actual br elements, with separate stanzas.
     fixtures = {
@@ -360,9 +368,8 @@ Dir.mktmpdir("pelgish-check-") do |source|
     index = File.read(File.join(output, "index.html"))
     fixtures.each_key do |name|
         check(!File.exist?(output_path.call(output, name)), "Default-unpublished URL leaked: #{name}")
-        check(!index.include?("href=\"#{urls.fetch(name)}\""), "Default-unpublished link leaked: #{name}")
     end
-    check(index.include?("<h1>Writing</h1>"), "Writing defaults hid the structural index")
+    check_blank_home(index)
     FileUtils.rm_r(output)
     # Use a fixed second loopback address so the user's localhost previews stay untouched.
     # CI and automatic local setup target Linux, where 127.0.0.2 is also loopback.
@@ -437,8 +444,8 @@ Dir.mktmpdir("pelgish-check-") do |source|
             next unless index.zero?
 
             preview_index = request.call(port, "/").body
+            check_blank_home(preview_index)
             urls.each_value do |path|
-                check(preview_index.include?("href=\"#{path}\""), "HTTP preview index omitted #{path}")
                 response = request.call(port, path)
                 check(response.code == "200" && response["location"].nil? &&
                       response["content-type"].include?("text/html"),
@@ -483,10 +490,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
     prose = File.read(File.join(output, "prose.html"))
     poem = File.read(File.join(output, "poem.html"))
 
-    # Check the public index, content URLs, layouts, and shared shell.
+    # Check the blank home, content URLs, layouts, and shared shell independently.
     check(!File.exist?(File.join(output, "writing")), "Stale writing-prefix output survived rebuild")
     check(!index.include?('href="/writing/'), "Index contains a writing-prefix link")
-    check(index.include?('href="/prose"') && index.include?('href="/poem"'), "Missing writing links")
+    check_blank_home(index)
     check(index.include?('rel="canonical" href="https://pelgish.ink/"'), "Root canonical must retain its slash")
     check(!File.exist?(File.join(output, "content")) && !index.include?('href="/content/'),
           "Content-prefix output leaked")
@@ -494,14 +501,13 @@ Dir.mktmpdir("pelgish-check-") do |source|
         html = File.read(output_path.call(output, name))
         check(html.include?("href=\"https://pelgish.ink#{urls.fetch(name)}\""),
               "Canonical URL incorrect: #{name}")
-        check(index.scan("href=\"#{urls.fetch(name)}\"").size == 1, "Missing/duplicate index link: #{name}")
+        check(!html.include?("All writing") && !html.include?("<footer"), "Empty writing footer survived")
         route = File.join(output, urls.fetch(name).delete_prefix("/"))
         check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
         check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
               "Writing shows an automatic publication date: #{name}")
     end
     check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
-    check(!index.include?("No writing published yet."), "Empty state shown with writing")
     check(prose.include?('<article class="writing prose">'), "Prose layout missing")
     check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
     check(prose.include?("<p>Paragraph one.</p>") && prose.include?("<p>Paragraph two.</p>"), "Prose paragraphs missing")
@@ -515,6 +521,11 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?('href="https://fonts.googleapis.com/css2?family=Cantarell:ital,wght@0,400;0,700;1,400&amp;family=Fondamento&amp;display=swap"'),
               "Official font stylesheet or requested styles missing")
         check(html.include?('id="appearance-toggle" type="button" hidden'), "Toggle must start hidden without JS")
+        %w[moon sun].each do |icon|
+            check(html.match?(/<svg class="appearance-#{icon}"[^>]*aria-hidden="true"[^>]*focusable="false"/),
+                  "Decorative #{icon} icon missing")
+        end
+        check(!html.include?("All writing") && !html.include?("<footer"), "Writing footer survived")
         check(html.index('src="/assets/js/appearance.js"') < html.index('href="/assets/css/style.css"'),
               "Appearance must initialize before local CSS")
     end
@@ -525,8 +536,9 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
-    check(!index.include?("Unpublished fixture"), "Draft leaked into index")
-    check(!File.exist?(File.join(output, "draft.html")), "Draft page leaked")
+    %w[draft explicit-draft].each do |name|
+        check(!File.exist?(output_path.call(output, name)), "Draft page leaked: #{name}")
+    end
 
     # Unpublication deletes persisted fields and removes an already-built public URL.
     path = File.join(source, "content/prose.md")
@@ -534,7 +546,6 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(File.read(path) == fixtures["prose"], "Unpublish retained publication fields")
     output = build(source)
     check(!File.exist?(File.join(output, "prose.html")), "Unpublished URL survived rebuild")
-    check(!File.read(File.join(output, "index.html")).include?('href="/prose"'), "Unpublished index link survived rebuild")
 
     # Native opt-in works without the publication CLI or a stored timestamp.
     path = File.join(source, "content/haiku/manual.md")
@@ -542,7 +553,8 @@ Dir.mktmpdir("pelgish-check-") do |source|
     output = build(source)
     html = File.read(File.join(output, "haiku/manual.html"))
     check(html.include?("Manual body.") && !html.include?("<time"), "Manual publication did not work")
-    check(File.read(File.join(output, "index.html")).include?('href="/haiku/manual"'), "Manual publication is not listed")
+    check(html.include?('rel="canonical" href="https://pelgish.ink/haiku/manual"'), "Manual publication canonical missing")
+    check_blank_home(File.read(File.join(output, "index.html")))
 
     # Unpublishing an override retains its metadata/body and removes its custom URL.
     path = File.join(source, "content/stable.md")
@@ -550,7 +562,6 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(File.read(path) == fixtures["stable"], "Unpublish changed native permalink or body")
     output = build(source)
     check(!File.exist?(File.join(output, "custom/path.html")), "Unpublished override survived rebuild")
-    check(!File.read(File.join(output, "index.html")).include?('href="/custom/path"'), "Unpublished override link survived")
 
     # Unsupported palettes must fail explicitly instead of emitting unstyled pages.
     invalid_scheme = File.join(source, "content/unknown-scheme.md")
@@ -590,7 +601,7 @@ luminance = lambda do |hex|
 end
 ["", "dark-"].each do |prefix|
     background = luminance.call(colors.fetch("#{prefix}background"))
-    %w[foreground heading muted link rule].each do |role|
+    %w[foreground heading muted link accent-link rule].each do |role|
         foreground = luminance.call(colors.fetch(role == "rule" ? role : "#{prefix}#{role}"))
         contrast = ([background, foreground].max + 0.05) / ([background, foreground].min + 0.05)
         check(contrast >= (role == "rule" ? 3 : 4.5), "#{prefix}#{role} contrast too low: #{contrast.round(2)}")

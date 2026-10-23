@@ -27,7 +27,10 @@
         root.dataset.appearance = appearance;
         const button = document.getElementById("appearance-toggle");
         if (button) {
-            button.textContent = appearance === "dark" ? "Switch to light mode" : "Switch to dark mode";
+            const nextAppearance = appearance === "dark" ? "light" : "dark";
+            const label = `Switch to ${nextAppearance} mode (currently ${appearance} mode)`;
+            button.setAttribute("aria-label", label);
+            button.title = label;
         }
     }
 
