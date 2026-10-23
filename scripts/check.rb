@@ -325,7 +325,7 @@ end
 puts "PASS: setup help/errors, missing prerequisites, opt-in/unsupported systems, local locked Bundler, idempotence, and failure propagation"
 
 Dir.mktmpdir("pelgish-check-") do |source|
-    %w[_config.yml _plugins _layouts _includes assets index.html CNAME].each do |path|
+    %w[_config.yml _plugins _layouts assets index.html CNAME].each do |path|
         FileUtils.cp_r(File.join(root, path), source)
     end
     FileUtils.mkdir_p(File.join(source, "content"))
@@ -517,11 +517,13 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(prose.include?("<body>"), "Default paper theme missing")
     check(poem.match?(/<p>Line one<br\s*\/?>\s*Line two<\/p>/), "Verse line break missing")
     check(poem.include?("<p>Stanza two.</p>"), "Separate verse stanza missing")
-    %w[prose poem].each do |name|
-        timestamp = frontmatter(File.join(source, "content", "#{name}.md"))["published_timestamp"]
-        html = name == "prose" ? prose : poem
-        rendered = html[/<time datetime="([^"]+)">/, 1]
-        check(rendered && Time.iso8601(rendered) == Time.iso8601(timestamp), "Semantic publication timestamp missing: #{name}")
+    published_names.each do |name|
+        data = frontmatter(File.join(source, "content", "#{name}.md"))
+        check(data["published"] == true && Time.iso8601(data.fetch("published_timestamp")),
+              "Publication metadata missing: #{name}")
+        html = File.read(output_path.call(output, name))
+        check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
+              "Writing shows an automatic publication date: #{name}")
     end
     check(File.file?(File.join(output, "custom/path.html")), "Explicit permalink missing")
     check(prose.include?('href="https://pelgish.ink/prose"'), "Canonical URL incorrect")
@@ -547,7 +549,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(!File.exist?(File.join(output, "prose.html")), "Unpublished URL survived rebuild")
     check(!File.read(File.join(output, "index.html")).include?('href="/prose"'), "Unpublished index link survived rebuild")
 
-    # Native opt-in works without the publication CLI or a display timestamp.
+    # Native opt-in works without the publication CLI or a stored timestamp.
     path = File.join(source, "content/haiku/manual.md")
     File.write(path, "---\ntitle: Manual opt-in\npublished: true\n---\nManual body.\n")
     output = build(source)
