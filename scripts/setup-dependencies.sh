@@ -2,7 +2,6 @@
 # Set up local Ruby/Jekyll dependencies; system package changes require opt-in.
 set -euo pipefail
 
-# Print usage before checking prerequisites, so help works without Ruby.
 usage() {
     printf '%s\n' \
         'Usage: scripts/setup-dependencies.sh [--install-system-dependencies]' \
@@ -16,10 +15,8 @@ usage() {
         '  --install-system-dependencies     Install missing system prerequisites'
 }
 
-# Accept only the explicit system-install opt-in and help options.
 install_system=false
 for argument in "$@"; do
-    # Reject unknown arguments before any setup or installation can happen.
     if [[ "${argument}" == -h || "${argument}" == --help ]]; then
         usage
         exit 0
@@ -31,7 +28,6 @@ for argument in "$@"; do
     fi
 done
 
-# Resolve all project-local paths relative to this script rather than the caller.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
@@ -45,26 +41,21 @@ if [[ "$(uname -s)" == Linux && -r /etc/os-release ]]; then
     # os-release is a trusted system file, not repository-supplied configuration.
     . /etc/os-release
 
-    # Similar distributions are not implicitly treated as supported platforms.
     if [[ "${ID:-}" == ubuntu || "${ID:-}" == debian ]]; then
         supported_system=true
     fi
 fi
 
-# Use the distribution packages for Ruby, native extension builds, and HTTPS.
 readonly PACKAGES=(ruby ruby-dev build-essential pkg-config libssl-dev zlib1g-dev ca-certificates)
 
-# Report concrete missing tools and Ruby development/runtime components.
 find_missing() {
     missing=()
     for prerequisite in ruby gem make gcc g++ pkg-config; do
-        # Missing commands are reported together rather than one per retry.
         if ! command -v "${prerequisite}" >/dev/null 2>&1; then
             missing+=("${prerequisite}")
         fi
     done
 
-    # Runtime Ruby alone is insufficient when native extensions need compilation.
     if command -v ruby >/dev/null 2>&1; then
         # Check the headers for the active Ruby, not just a distro package name.
         if ! ruby -rrbconfig -e 'exit File.file?(File.join(RbConfig::CONFIG.fetch("rubyhdrdir"), "ruby.h"))'; then
@@ -83,20 +74,16 @@ find_missing
 if (( ${#missing[@]} > 0 )); then
     printf 'setup-dependencies.sh: missing prerequisite: %s\n' "${missing[@]}" >&2
 
-    # Without permission, print the supported manual recovery command instead.
     if [[ "${install_system}" != true ]]; then
-        # Other platforms must obtain the reported prerequisites themselves.
         if [[ "${supported_system}" == true ]]; then
             printf 'Re-run with --install-system-dependencies to opt in, or run:\n  sudo apt-get update\n  sudo apt-get install -y %s\n' "${PACKAGES[*]}" >&2
         else
             printf 'Install the listed prerequisites using your platform tools, then retry. Automatic installation supports only Debian/Ubuntu with apt-get.\n' >&2
         fi
 
-        # Exit before any privileged operation.
         exit 1
     fi
 
-    # Even explicit opt-in cannot enable an unsupported package manager.
     if [[ "${supported_system}" != true ]] || ! command -v apt-get >/dev/null 2>&1; then
         printf 'setup-dependencies.sh: system installation supports only Debian/Ubuntu with apt-get; install the listed prerequisites manually.\n' >&2
         exit 1
@@ -105,27 +92,16 @@ if (( ${#missing[@]} > 0 )); then
     # Request privileges only for apt, never for RubyGems or project files.
     privilege=()
     if (( EUID != 0 )); then
-        # Fail with an administrator command rather than attempting another escalator.
         if ! command -v sudo >/dev/null 2>&1; then
             printf 'setup-dependencies.sh: sudo is missing; ask an administrator to run apt-get update and apt-get install -y %s.\n' "${PACKAGES[*]}" >&2
             exit 1
         fi
 
-        # Root can invoke apt directly; normal users use sudo.
         privilege=(sudo)
     fi
 
-    # Surface package index failures before attempting installation.
-    if ! "${privilege[@]}" apt-get update; then
-        printf 'setup-dependencies.sh: apt-get update failed; fix the package manager error above and retry.\n' >&2
-        exit 1
-    fi
-
-    # Install only the documented local development prerequisites.
-    if ! "${privilege[@]}" apt-get install -y "${PACKAGES[@]}"; then
-        printf 'setup-dependencies.sh: apt-get install failed; fix the package manager error above and retry.\n' >&2
-        exit 1
-    fi
+    "${privilege[@]}" apt-get update
+    "${privilege[@]}" apt-get install -y "${PACKAGES[@]}"
 
     # Verify the actual active tools after apt, including non-system Ruby installs.
     find_missing
@@ -141,25 +117,15 @@ if ! ruby -e 'exit Gem::Requirement.new(">= 3.2", "< 4.0").satisfied_by?(Gem::Ve
     exit 1
 fi
 
-# Read Bundler's exact lockfile version rather than choosing the latest release.
-bundler_version="$(ruby -e '
-    version = File.read("Gemfile.lock")[/^BUNDLED WITH\n\s+(\S+)/, 1]
-    abort "setup-dependencies.sh: Gemfile.lock has no BUNDLED WITH version" unless version
-    puts version
-')"
-readonly bundler_version
-
 # Reuse compatible installed Bundler before downloading a project-local copy.
 if ! "${BUNDLE}" --version; then
+    bundler_version="$(ruby -e '
+        version = File.read("Gemfile.lock")[/^BUNDLED WITH\n\s+(\S+)/, 1]
+        abort "setup-dependencies.sh: Gemfile.lock has no BUNDLED WITH version" unless version
+        puts version
+    ')"
     printf 'Installing Bundler %s locally...\n' "${bundler_version}"
-
-    # RubyGems failures must stop setup without claiming success.
-    if ! gem install bundler --version "${bundler_version}" --no-document --install-dir "${REPO_ROOT}/.bundle/tools"; then
-        printf 'setup-dependencies.sh: local Bundler installation failed; check the RubyGems error above and retry.\n' >&2
-        exit 1
-    fi
-
-    # Confirm the launcher can find the new installation.
+    gem install bundler --version "${bundler_version}" --no-document --install-dir "${REPO_ROOT}/.bundle/tools"
     "${BUNDLE}" --version
 fi
 
@@ -167,15 +133,9 @@ fi
 export BUNDLE_FROZEN=true
 "${BUNDLE}" config set --local path vendor/bundle
 
-# A complete bundle needs no install; missing gems must install successfully.
 if ! "${BUNDLE}" check; then
-    # Keep Bundler's own error details and add an explicit setup failure message.
-    if ! "${BUNDLE}" install; then
-        printf 'setup-dependencies.sh: locked bundle installation failed; resolve the error above and retry. Gemfile.lock was not updated.\n' >&2
-        exit 1
-    fi
+    "${BUNDLE}" install
 fi
 
-# Recheck before printing the exact development and test commands.
 "${BUNDLE}" check
 printf 'Setup complete. Run:\n  cd %q\n  ./scripts/serve.sh\n  ./scripts/serve.sh --show-unpublished\n  ./scripts/bundle.sh exec ruby scripts/check.rb\n  JEKYLL_ENV=production ./scripts/bundle.sh exec jekyll build --trace\n' "${REPO_ROOT}"

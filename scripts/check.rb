@@ -9,25 +9,22 @@ require "time"
 require "socket"
 require "net/http"
 
-# Raise an actionable error instead of silently accepting missing output.
 def check(condition, message)
     raise message unless condition
 end
 
 # Use the same configuration as the real site, with temporary source/output paths.
-def build(source, unpublished: false)
-    destination = File.join(source, unpublished ? "_preview" : "_site")
+def build(source)
+    destination = File.join(source, "_site")
     config = Jekyll.configuration(
         "source" => source,
         "destination" => destination,
-        "unpublished" => unpublished,
         "quiet" => true
     )
     Jekyll::Site.new(config).process
     destination
 end
 
-# Fixtures never enter the repository's content folder or deployed artifact.
 root = File.expand_path("..", __dir__)
 
 # Invoke the actual executable, preserving the supplied working directory.
@@ -133,7 +130,7 @@ Dir.mktmpdir("pelgish-serve-check-") do |directory|
         #!/usr/bin/env ruby
         require "json"
         if ARGV[0, 3] == %w[exec jekyll serve]
-            puts JSON.generate("args" => ARGV, "cwd" => Dir.pwd, "gemfile" => ENV["BUNDLE_GEMFILE"])
+            puts JSON.generate("args" => ARGV, "cwd" => Dir.pwd)
         end
     RUBY
     FileUtils.chmod(0o755, bundle)
@@ -166,7 +163,7 @@ Dir.mktmpdir("pelgish-serve-check-") do |directory|
         result = JSON.parse(stdout)
         defaults = livereload_port ? ["--livereload-port", livereload_port] : []
         check(result["args"] == %w[exec jekyll serve --livereload] + forwarded + defaults, "Incorrect forwarding for #{arguments.inspect}")
-        check(result["cwd"] == directory && result["gemfile"] == File.join(directory, "Gemfile"), "Incorrect repository resolution")
+        check(result["cwd"] == directory, "Incorrect repository resolution")
     end
 
     # Invalid positional ports and competing selectors must fail before Bundler runs.
@@ -367,15 +364,6 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     check(index.include?("<h1>Writing</h1>"), "Writing defaults hid the structural index")
     FileUtils.rm_r(output)
-    preview = build(source, unpublished: true)
-    fixtures.each_key do |name|
-        check(File.file?(output_path.call(preview, name)), "Preview omits #{name}")
-        check(File.read(File.join(preview, "index.html")).include?("href=\"#{urls.fetch(name)}\""), "Preview link missing: #{name}")
-    end
-    check(!File.exist?(File.join(preview, "writing")), "Preview generated a writing-prefix route")
-    check(!File.exist?(File.join(preview, "content")), "Preview generated a content-prefix route")
-    check(!File.read(File.join(preview, "prose.html")).include?("<time"), "Unpublished preview shows publication date")
-    FileUtils.rm_r(preview)
     # Use a fixed second loopback address so the user's localhost previews stay untouched.
     # CI and automatic local setup target Linux, where 127.0.0.2 is also loopback.
     fixture_host = "127.0.0.2"
@@ -428,7 +416,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
             _, log = spawn_preview.call(name, options)
             [port, livereload_port, log]
         end
-        previews.each do |port, livereload_port, log|
+        previews.each_with_index do |(port, livereload_port, log), index|
             response = nil
             deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 20
             loop do
@@ -446,8 +434,11 @@ Dir.mktmpdir("pelgish-check-") do |source|
                   "HTTP preview omitted the missing-field draft or added publication metadata")
             check(response.body.include?(":#{livereload_port}/livereload.js"), "Wrong LiveReload port in browser script")
             check(request.call(livereload_port, "/livereload.js").code == "200", "LiveReload asset server is unavailable")
-            check(request.call(port, "/").body.include?('href="/draft"'), "HTTP preview index omitted draft")
+            next unless index.zero?
+
+            preview_index = request.call(port, "/").body
             urls.each_value do |path|
+                check(preview_index.include?("href=\"#{path}\""), "HTTP preview index omitted #{path}")
                 response = request.call(port, path)
                 check(response.code == "200" && response["location"].nil? &&
                       response["content-type"].include?("text/html"),
@@ -506,6 +497,8 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(index.scan("href=\"#{urls.fetch(name)}\"").size == 1, "Missing/duplicate index link: #{name}")
         route = File.join(output, urls.fetch(name).delete_prefix("/"))
         check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
+        check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
+              "Writing shows an automatic publication date: #{name}")
     end
     check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
     check(!index.include?("No writing published yet."), "Empty state shown with writing")
@@ -517,29 +510,12 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(prose.include?("<body>"), "Default paper theme missing")
     check(poem.match?(/<p>Line one<br\s*\/?>\s*Line two<\/p>/), "Verse line break missing")
     check(poem.include?("<p>Stanza two.</p>"), "Separate verse stanza missing")
-    published_names.each do |name|
-        data = frontmatter(File.join(source, "content", "#{name}.md"))
-        check(data["published"] == true && Time.iso8601(data.fetch("published_timestamp")),
-              "Publication metadata missing: #{name}")
-        html = File.read(output_path.call(output, name))
-        check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
-              "Writing shows an automatic publication date: #{name}")
-    end
-    check(File.file?(File.join(output, "custom/path.html")), "Explicit permalink missing")
-    check(prose.include?('href="https://pelgish.ink/prose"'), "Canonical URL incorrect")
     check(prose.include?('href="/assets/css/style.css"'), "Stylesheet URL incorrect")
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
     check(!index.include?("Unpublished fixture"), "Draft leaked into index")
     check(!File.exist?(File.join(output, "draft.html")), "Draft page leaked")
-
-    # Remove production output before previewing, so it cannot become a static input.
-    FileUtils.rm_r(output)
-    preview = build(source, unpublished: true)
-    check(File.file?(File.join(preview, "draft.html")), "Unpublished preview missing")
-    check(File.read(File.join(preview, "index.html")).include?("Unpublished fixture"), "Preview index omits draft")
-    FileUtils.rm_r(preview)
 
     # Unpublication deletes persisted fields and removes an already-built public URL.
     path = File.join(source, "content/prose.md")

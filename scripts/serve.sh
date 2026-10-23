@@ -5,7 +5,6 @@ set -euo pipefail
 # Translate only our public preview option; leave unrelated Jekyll options alone.
 arguments=()
 for argument in "$@"; do
-    # Recognize only wrapper options; Jekyll retains ownership of other arguments.
     if [[ "${argument}" == --show-unpublished ]]; then
         arguments+=(--unpublished)
     elif [[ "${argument}" == --unpublished || "${argument}" == --unpublished=* ]]; then
@@ -27,7 +26,6 @@ for argument in "$@"; do
     fi
 done
 
-# Keep original argument boundaries while applying the wrapper translation.
 set -- "${arguments[@]}"
 
 # Translate an optional leading decimal port; leave Jekyll options untouched.
@@ -56,7 +54,6 @@ http_port=4000
 explicit_livereload_port=false
 expect_http_port=false
 for argument in "$@"; do
-    # Preserve every original argument for Jekyll, including explicit overrides.
     if [[ "${expect_http_port}" == true ]]; then
         http_port="${argument}"
         expect_http_port=false
@@ -87,7 +84,6 @@ if [[ "${explicit_livereload_port}" != true ]]; then
         livereload_port="$((http_port - 10000))"
     fi
 
-    # An explicit caller-supplied LiveReload port bypasses this default entirely.
     livereload_arguments=(--livereload-port "${livereload_port}")
 fi
 
@@ -97,23 +93,9 @@ readonly SCRIPT_DIR
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly REPO_ROOT
 cd -- "${REPO_ROOT}"
-export BUNDLE_GEMFILE="${REPO_ROOT}/Gemfile"
-
-# Give setup guidance before attempting to start Jekyll.
-for prerequisite in ruby; do
-    if ! command -v "${prerequisite}" >/dev/null 2>&1; then
-        printf 'serve.sh: missing %s; follow README.md local setup first.\n' "${prerequisite}" >&2
-        exit 1
-    fi
-done
 
 if ! "${SCRIPT_DIR}/bundle.sh" check; then
     printf 'serve.sh: dependencies unavailable; run %s/scripts/setup-dependencies.sh.\n' "${REPO_ROOT}" >&2
-    exit 1
-fi
-
-if ! "${SCRIPT_DIR}/bundle.sh" exec jekyll --version; then
-    printf 'serve.sh: Jekyll cannot run; run scripts/setup-dependencies.sh (see README.md).\n' >&2
     exit 1
 fi
 

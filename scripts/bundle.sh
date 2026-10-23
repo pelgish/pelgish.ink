@@ -2,12 +2,10 @@
 # Run the locked Bundler, including a project-local installation made by setup.
 set -euo pipefail
 
-# Locate the manifest without changing the caller's working directory.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 export BUNDLE_GEMFILE="${SCRIPT_DIR}/../Gemfile"
 
-# Provide setup guidance even when Ruby itself is unavailable.
 if ! command -v ruby >/dev/null 2>&1; then
     printf 'bundle.sh: missing Ruby; run scripts/setup-dependencies.sh first.\n' >&2
     exit 1
