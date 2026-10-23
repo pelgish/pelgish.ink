@@ -506,12 +506,18 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
         check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
               "Writing shows an automatic publication date: #{name}")
+        check(!html.include?('class="kind"') && !html.match?(/>\s*(Poetry|Prose)\s*</),
+              "Writing shows an automatic type label: #{name}")
     end
     check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
     check(prose.include?('<article class="writing prose">'), "Prose layout missing")
     check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
     check(prose.include?("<p>Paragraph one.</p>") && prose.include?("<p>Paragraph two.</p>"), "Prose paragraphs missing")
     check(poem.include?('<article class="writing poetry">'), "Poetry layout missing")
+    check(poem.include?("<h1>Verse fixture</h1>"), "Authored poetry title missing")
+    untitled = File.read(output_path.call(output, "haiku/20260620-001"))
+    check(untitled.include?("<p>Untitled fixture body.</p>"), "Untitled haiku content missing")
+    check(!untitled.match?(/<h1\b[^>]*>\s*\S.*?<\/h1>/m), "Untitled haiku gained an automatic heading")
     check(poem.include?('data-appearance="dark"'), "Explicit ink appearance hint missing")
     check(!prose.include?("data-appearance="), "Default must allow the system appearance")
     stable = File.read(File.join(output, "custom/path.html"))
