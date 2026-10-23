@@ -1,4 +1,4 @@
-# Give content Markdown root-relative directory URLs before Jekyll filters drafts.
+# Give content Markdown slashless URLs before Jekyll filters drafts.
 Jekyll::Hooks.register :pages, :post_init do |page|
     next unless page.relative_path.start_with?("content/") &&
                 page.site.find_converter_instance(Jekyll::Converters::Markdown).matches(page.ext)
@@ -6,10 +6,10 @@ Jekyll::Hooks.register :pages, :post_init do |page|
     # Jekyll's publisher uses Hash#fetch, which bypasses lazy frontmatter defaults.
     page.data["published"] = page.data["published"]
     path = page.relative_path.delete_prefix("content/").delete_suffix(page.ext)
-    permalink = page.data["permalink"] || "/#{path}/"
-    # Directory indexes serve HTML safely at extensionless paths on static hosts.
-    permalink += "/" if File.extname(permalink).empty? && !permalink.end_with?("/")
-    page.data["permalink"] = permalink
+    permalink = (page.data["permalink"] || "/#{path}").sub(%r{/+\z}, "").delete_suffix(".html")
+    # Jekyll appends .html to the destination, not the public URL.
+    # GitHub Pages and Jekyll serve resolve that backing file without a redirect.
+    page.data["permalink"] = permalink.empty? ? "/" : permalink
 end
 
 # Markdown without frontmatter would otherwise be copied publicly as a raw file.

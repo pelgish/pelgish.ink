@@ -340,18 +340,19 @@ Dir.mktmpdir("pelgish-check-") do |source|
         "explicit-draft" => "---\ntitle: 'Explicit draft'\npublished: false\n---\nDraft body.\n",
         "stable" => "---\ntitle: 'Stable URL'\npermalink: /custom/path\n---\nStable body.\n",
         "haiku/haiku1" => "---\ntitle: 'Haiku fixture'\nlayout: poetry\n---\nFixture body.\n",
+        "haiku/20260620-001" => "---\nlayout: poetry\n---\nUntitled fixture body.\n",
         "haiku/nested/haiku1" => "---\ntitle: 'Nested fixture'\nlayout: poetry\n---\nNested body.\n",
         "html-override" => "---\ntitle: 'HTML override'\npermalink: /custom/page.html\n---\nHTML body.\n",
         "slash-override" => "---\ntitle: 'Slash override'\npermalink: /custom/slash/\n---\nSlash body.\n"
     }
-    urls = fixtures.keys.to_h { |name| [name, "/#{name}/"] }.merge(
-        "stable" => "/custom/path/", "html-override" => "/custom/page.html",
-        "slash-override" => "/custom/slash/"
+    urls = fixtures.keys.to_h { |name| [name, "/#{name}"] }.merge(
+        "stable" => "/custom/path", "html-override" => "/custom/page",
+        "slash-override" => "/custom/slash"
     )
-    # A page permalink is either a directory index or an explicit HTML file.
+    # Native Jekyll pages write HTML backing files for extensionless permalinks.
     output_path = lambda do |destination, name|
         url = urls.fetch(name).delete_prefix("/")
-        File.join(destination, url.end_with?("/") ? "#{url}index.html" : url)
+        File.join(destination, "#{url}.html")
     end
     fixtures.each do |name, text|
         path = File.join(source, "content", "#{name}.md")
@@ -373,7 +374,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     check(!File.exist?(File.join(preview, "writing")), "Preview generated a writing-prefix route")
     check(!File.exist?(File.join(preview, "content")), "Preview generated a content-prefix route")
-    check(!File.read(File.join(preview, "prose/index.html")).include?("<time"), "Unpublished preview shows publication date")
+    check(!File.read(File.join(preview, "prose.html")).include?("<time"), "Unpublished preview shows publication date")
     FileUtils.rm_r(preview)
     # Use a fixed second loopback address so the user's localhost previews stay untouched.
     # CI and automatic local setup target Linux, where 127.0.0.2 is also loopback.
@@ -432,7 +433,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
             deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 20
             loop do
                 begin
-                    response = request.call(port, "/draft/")
+                    response = request.call(port, "/draft")
                     break if response.code == "200"
                 rescue SystemCallError, Timeout::Error, EOFError
                     # Startup has not bound the HTTP port yet.
@@ -445,19 +446,19 @@ Dir.mktmpdir("pelgish-check-") do |source|
                   "HTTP preview omitted the missing-field draft or added publication metadata")
             check(response.body.include?(":#{livereload_port}/livereload.js"), "Wrong LiveReload port in browser script")
             check(request.call(livereload_port, "/livereload.js").code == "200", "LiveReload asset server is unavailable")
-            check(request.call(port, "/").body.include?('href="/draft/"'), "HTTP preview index omitted draft")
-            %w[/haiku/haiku1 /haiku/nested/haiku1 /custom/path].each do |path|
+            check(request.call(port, "/").body.include?('href="/draft"'), "HTTP preview index omitted draft")
+            urls.each_value do |path|
                 response = request.call(port, path)
-                check(%w[200 301 302].include?(response.code), "Clean URL is not reachable: #{path}")
-                if response.is_a?(Net::HTTPRedirection)
-                    check(URI(response["location"]).path == "#{path}/", "Unexpected clean-URL redirect")
-                    response = request.call(port, "#{path}/")
-                end
-                check(response.code == "200" && response["content-type"].include?("text/html"),
-                      "Clean URL did not serve HTML: #{path}")
+                check(response.code == "200" && response["location"].nil? &&
+                      response["content-type"].include?("text/html"),
+                      "Slashless URL did not directly serve HTML: #{path}")
                 canonical = response.body[/rel="canonical" href="([^"]+)"/, 1]
-                check(canonical && URI(canonical).path == "#{path}/",
+                check(canonical && URI(canonical).path == path,
                       "Clean URL canonical is incorrect: #{path}")
+                backing = request.call(port, "#{path}.html")
+                check(backing.code == "200" && backing["content-type"].include?("text/html") &&
+                      backing.body == response.body,
+                      "Slashless URL does not match its HTML backing file: #{path}")
             end
             check(request.call(port, "/content/haiku/nested/haiku1.md").code == "404",
                   "Raw content Markdown leaked through preview")
@@ -480,19 +481,22 @@ Dir.mktmpdir("pelgish-check-") do |source|
     published_names.each do |name|
         publication(publisher, [File.join(source, "content", "#{name}.md")], source)
     end
-    # Rebuilding must remove stale prefix output.
+    # Rebuilding must remove stale prefix output and directory-index routes.
     FileUtils.mkdir_p(File.join(source, "_site/writing/prose"))
     File.write(File.join(source, "_site/writing/index.html"), "Stale index")
     File.write(File.join(source, "_site/writing/prose/index.html"), "Stale prose")
+    FileUtils.mkdir_p(File.join(source, "_site/haiku/haiku1"))
+    File.write(File.join(source, "_site/haiku/haiku1/index.html"), "Stale directory index")
     output = build(source)
     index = File.read(File.join(output, "index.html"))
-    prose = File.read(File.join(output, "prose/index.html"))
-    poem = File.read(File.join(output, "poem/index.html"))
+    prose = File.read(File.join(output, "prose.html"))
+    poem = File.read(File.join(output, "poem.html"))
 
     # Check the public index, content URLs, layouts, and shared shell.
     check(!File.exist?(File.join(output, "writing")), "Stale writing-prefix output survived rebuild")
     check(!index.include?('href="/writing/'), "Index contains a writing-prefix link")
-    check(index.include?('href="/prose/"') && index.include?('href="/poem/"'), "Missing writing links")
+    check(index.include?('href="/prose"') && index.include?('href="/poem"'), "Missing writing links")
+    check(index.include?('rel="canonical" href="https://pelgish.ink/"'), "Root canonical must retain its slash")
     check(!File.exist?(File.join(output, "content")) && !index.include?('href="/content/'),
           "Content-prefix output leaked")
     published_names.each do |name|
@@ -500,9 +504,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?("href=\"https://pelgish.ink#{urls.fetch(name)}\""),
               "Canonical URL incorrect: #{name}")
         check(index.scan("href=\"#{urls.fetch(name)}\"").size == 1, "Missing/duplicate index link: #{name}")
-        check(!File.exist?(File.join(output, "#{name}.html")), "Default HTML route leaked: #{name}")
+        route = File.join(output, urls.fetch(name).delete_prefix("/"))
+        check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
     end
-    check(!File.exist?(File.join(output, "stable")), "Override retained the default route")
+    check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
     check(!index.include?("No writing published yet."), "Empty state shown with writing")
     check(prose.include?('<article class="writing prose">'), "Prose layout missing")
     check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
@@ -518,19 +523,19 @@ Dir.mktmpdir("pelgish-check-") do |source|
         rendered = html[/<time datetime="([^"]+)">/, 1]
         check(rendered && Time.iso8601(rendered) == Time.iso8601(timestamp), "Semantic publication timestamp missing: #{name}")
     end
-    check(File.file?(File.join(output, "custom/path/index.html")), "Explicit permalink missing")
-    check(prose.include?('href="https://pelgish.ink/prose/"'), "Canonical URL incorrect")
+    check(File.file?(File.join(output, "custom/path.html")), "Explicit permalink missing")
+    check(prose.include?('href="https://pelgish.ink/prose"'), "Canonical URL incorrect")
     check(prose.include?('href="/assets/css/style.css"'), "Stylesheet URL incorrect")
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
     check(!index.include?("Unpublished fixture"), "Draft leaked into index")
-    check(!File.exist?(File.join(output, "draft/index.html")), "Draft page leaked")
+    check(!File.exist?(File.join(output, "draft.html")), "Draft page leaked")
 
     # Remove production output before previewing, so it cannot become a static input.
     FileUtils.rm_r(output)
     preview = build(source, unpublished: true)
-    check(File.file?(File.join(preview, "draft/index.html")), "Unpublished preview missing")
+    check(File.file?(File.join(preview, "draft.html")), "Unpublished preview missing")
     check(File.read(File.join(preview, "index.html")).include?("Unpublished fixture"), "Preview index omits draft")
     FileUtils.rm_r(preview)
 
@@ -539,24 +544,24 @@ Dir.mktmpdir("pelgish-check-") do |source|
     publication(publisher, ["--unpublish", path], source)
     check(File.read(path) == fixtures["prose"], "Unpublish retained publication fields")
     output = build(source)
-    check(!File.exist?(File.join(output, "prose/index.html")), "Unpublished URL survived rebuild")
-    check(!File.read(File.join(output, "index.html")).include?('href="/prose/"'), "Unpublished index link survived rebuild")
+    check(!File.exist?(File.join(output, "prose.html")), "Unpublished URL survived rebuild")
+    check(!File.read(File.join(output, "index.html")).include?('href="/prose"'), "Unpublished index link survived rebuild")
 
     # Native opt-in works without the publication CLI or a display timestamp.
     path = File.join(source, "content/haiku/manual.md")
     File.write(path, "---\ntitle: Manual opt-in\npublished: true\n---\nManual body.\n")
     output = build(source)
-    html = File.read(File.join(output, "haiku/manual/index.html"))
+    html = File.read(File.join(output, "haiku/manual.html"))
     check(html.include?("Manual body.") && !html.include?("<time"), "Manual publication did not work")
-    check(File.read(File.join(output, "index.html")).include?('href="/haiku/manual/"'), "Manual publication is not listed")
+    check(File.read(File.join(output, "index.html")).include?('href="/haiku/manual"'), "Manual publication is not listed")
 
     # Unpublishing an override retains its metadata/body and removes its custom URL.
     path = File.join(source, "content/stable.md")
     publication(publisher, ["--unpublish", path], source)
     check(File.read(path) == fixtures["stable"], "Unpublish changed native permalink or body")
     output = build(source)
-    check(!File.exist?(File.join(output, "custom/path/index.html")), "Unpublished override survived rebuild")
-    check(!File.read(File.join(output, "index.html")).include?('href="/custom/path/"'), "Unpublished override link survived")
+    check(!File.exist?(File.join(output, "custom/path.html")), "Unpublished override survived rebuild")
+    check(!File.read(File.join(output, "index.html")).include?('href="/custom/path"'), "Unpublished override link survived")
 
     # Bare Markdown must fail clearly rather than copying a draft as a public asset.
     File.write(File.join(source, "content/bare.md"), "Private draft without frontmatter\n")
