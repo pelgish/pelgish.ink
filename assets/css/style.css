@@ -99,9 +99,17 @@ button, input, select, textarea {
     border-radius: 0.25rem;
     color: var(--foreground);
     cursor: pointer;
+    flex-shrink: 0;
     min-height: 44px;
     min-width: 44px;
     padding: 0.25rem 0.75rem;
+}
+
+/* Center the glyph without exposing an inert control when JavaScript is off. */
+#appearance-toggle:not([hidden]) {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
 }
 
 #appearance-toggle:hover {
@@ -110,6 +118,7 @@ button, input, select, textarea {
 
 #appearance-toggle svg {
     fill: currentColor;
+    flex-shrink: 0;
     height: 1.1em;
     width: 1.1em;
     vertical-align: middle;
@@ -123,6 +132,23 @@ button, input, select, textarea {
 
 :root[data-appearance="dark"] .appearance-sun {
     display: inline;
+}
+
+/* Leave room for navigation and a full touch target on narrow screens. */
+@media (max-width: 30rem) {
+    body {
+        padding-inline: 1.25rem;
+    }
+
+    .site-header {
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+    }
+
+    #appearance-toggle {
+        padding: 0.25rem;
+        width: 44px;
+    }
 }
 
 main {
