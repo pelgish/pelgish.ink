@@ -1,0 +1,151 @@
+/* Local system fonts and two frontmatter-selectable reading palettes. */
+:root {
+    color-scheme: light;
+    --background: #faf8f3;
+    --foreground: #272722;
+    --muted: #59594f;
+    --link: #365845;
+    --rule: #d3d0c6;
+}
+
+.theme-ink {
+    color-scheme: dark;
+    --background: #1d2321;
+    --foreground: #eeeee6;
+    --muted: #bcbfb5;
+    --link: #b7d8c0;
+    --rule: #505952;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--background);
+    color: var(--foreground);
+    font: 112.5% / 1.75 Georgia, "Times New Roman", serif;
+    overflow-wrap: anywhere;
+}
+
+/* Keep theme colors on body too, so the chosen palette covers the viewport. */
+body {
+    background: var(--background);
+    color: var(--foreground);
+    margin: 0;
+    min-height: 100vh;
+    padding: 0 max(1rem, calc((100% - 42rem) / 2));
+}
+
+a {
+    color: var(--link);
+    text-underline-offset: 0.2em;
+}
+
+a:hover {
+    text-decoration-thickness: 0.15em;
+}
+
+:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 4px;
+}
+
+.site-header {
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2rem;
+    justify-content: space-between;
+    padding: 1.5rem 0;
+}
+
+.site-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+main {
+    margin: 3rem 0 4rem;
+}
+
+h1, h2, h3 {
+    line-height: 1.25;
+    text-wrap: balance;
+}
+
+h1 {
+    font-size: clamp(1.8rem, 6vw, 2.5rem);
+    margin: 0 0 1.5rem;
+}
+
+.kind, .site-footer, .writing-list p {
+    color: var(--muted);
+}
+
+.kind {
+    font-size: 0.85rem;
+    margin: 0 0 0.5rem;
+}
+
+.writing-body p {
+    margin: 0 0 1.3em;
+}
+
+.poetry .writing-body {
+    line-height: 1.65;
+}
+
+.poetry .writing-body p {
+    margin-bottom: 1.8em;
+}
+
+.writing-list {
+    list-style: none;
+    padding: 0;
+}
+
+.writing-list li {
+    margin-bottom: 1.5rem;
+}
+
+.writing-list p {
+    font-size: 0.95rem;
+    margin: 0.25rem 0 0;
+}
+
+blockquote {
+    border-left: 3px solid var(--rule);
+    margin-left: 0;
+    padding-left: 1rem;
+}
+
+img, video {
+    height: auto;
+    max-width: 100%;
+}
+
+pre {
+    overflow-x: auto;
+    padding: 1rem;
+    border: 1px solid var(--rule);
+}
+
+.site-footer {
+    border-top: 1px solid var(--rule);
+    font-size: 0.85rem;
+    padding: 1.5rem 0;
+}
+
+.skip-link {
+    background: var(--background);
+    left: 1rem;
+    padding: 0.5rem;
+    position: absolute;
+    top: -10rem;
+}
+
+.skip-link:focus {
+    top: 0.5rem;
+}

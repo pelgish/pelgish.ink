@@ -1,0 +1,19 @@
+---
+layout: default
+title: Writing
+---
+<!-- Jekyll omits unpublished writing unless --unpublished is enabled for preview. -->
+<h1>Writing</h1>
+{% assign works = site.writing | sort_natural: 'title' %}
+{% if works.size > 0 %}
+<ul class="writing-list">
+    {% for work in works %}
+    <li>
+        <a href="{{ work.url | relative_url }}">{{ work.title | escape }}</a>
+        {% if work.description %}<p>{{ work.description | escape }}</p>{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No writing published yet.</p>
+{% endif %}

@@ -1,0 +1,18 @@
+# Artifacts
+/_site/
+/.jekyll-cache/
+/.jekyll-metadata
+/.sass-cache/
+/.bundle/
+/vendor/
+.DS_Store
+.env
+
+# Vim swapfiles
+*.swp
+*.swo
+*.swn
+
+# Keys/certs
+*.pem
+*.key

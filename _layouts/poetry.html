@@ -1,0 +1,14 @@
+---
+layout: default
+---
+<!-- Verse uses Markdown hard breaks within paragraphs, with paragraphs as stanzas. -->
+<article class="writing poetry">
+    <header>
+        <p class="kind">Poetry</p>
+        <h1>{{ page.title | escape }}</h1>
+        {% include published-time.html %}
+    </header>
+    <div class="writing-body">
+        {{ content }}
+    </div>
+</article>

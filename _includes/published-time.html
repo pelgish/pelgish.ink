@@ -1,0 +1,3 @@
+{% if page.published and page.published_timestamp %}
+<p class="published-time">Published <time datetime="{{ page.published_timestamp | date_to_xmlschema | escape }}">{{ page.published_timestamp | date: "%B %-d, %Y" }}</time></p>
+{% endif %}

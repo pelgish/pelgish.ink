@@ -1,0 +1,55 @@
+# Pull requests build only; deployments use the repository's configured main branch.
+name: Pages
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        env:
+            JEKYLL_ENV: production
+            BUNDLE_FROZEN: "true"
+        steps:
+            - uses: actions/checkout@v5
+            - uses: ruby/setup-ruby@v1
+              with:
+                  bundler: "4.0.9"
+                  bundler-cache: true
+            - name: Check generated behavior
+              run: |
+                  bash -n scripts/serve.sh
+                  bash -n scripts/publish.sh
+                  bash -n scripts/bundle.sh
+                  bash -n scripts/setup-dependencies.sh
+                  bundle exec ruby scripts/check.rb
+            - name: Build
+              run: bundle exec jekyll build --trace
+            - uses: actions/upload-pages-artifact@v3
+              if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+              with:
+                  path: _site
+
+    deploy:
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        needs: build
+        runs-on: ubuntu-latest
+        permissions:
+            pages: write
+            id-token: write
+        concurrency:
+            group: github-pages
+            cancel-in-progress: false
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Deploy
+              id: deployment
+              uses: actions/deploy-pages@v4

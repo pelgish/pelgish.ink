@@ -1,0 +1,14 @@
+---
+layout: default
+---
+<!-- Paragraph-oriented writing; the shell supplies the document title. -->
+<article class="writing prose">
+    <header>
+        <p class="kind">Prose</p>
+        <h1>{{ page.title | escape }}</h1>
+        {% include published-time.html %}
+    </header>
+    <div class="writing-body">
+        {{ content }}
+    </div>
+</article>
