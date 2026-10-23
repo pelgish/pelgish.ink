@@ -8,6 +8,7 @@ require "date"
 require "time"
 require "socket"
 require "net/http"
+require "cgi"
 
 def check(condition, message)
     raise message unless condition
@@ -21,8 +22,9 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
     prefix = html[/href="([^"]*)\/assets\/css\/style.css"/, 1]
     check(controls.include?("href=\"#{prefix}/haiku/random\"") &&
           controls.include?('aria-label="Haikus (read a random haiku)"'), "Haiku control must link to the random route")
-    check(controls.match?(/<button class="icon-control" type="button" disabled(?:="")? aria-label="Short Stories \(not available yet\)"/) &&
-          controls.scan(/\bhref=/).length == 1, "Short stories must be disabled with no navigation")
+    check(controls.include?("<a class=\"icon-control\" href=\"#{prefix}/story\" aria-label=\"Short Stories\"") &&
+          controls.scan(/\bhref=/).length == 2 && !controls.include?("disabled"),
+          "Short Stories must be an accessible anchor to the slashless listing")
     check(controls.match?(/icon-haiku" aria-hidden="true"><\/span>\s*<span>Haikus<\/span>/) &&
           controls.match?(/icon-shortstory" aria-hidden="true"><\/span>\s*<span>Short Stories<\/span>/),
           "Home categories must show their visible labels after the icons")
@@ -379,7 +381,7 @@ end
 puts "PASS: setup help/errors, missing prerequisites, opt-in/unsupported systems, local locked Bundler, idempotence, and failure propagation"
 
 Dir.mktmpdir("pelgish-check-") do |source|
-    %w[_config.yml _plugins _layouts assets index.md CNAME].each do |path|
+    %w[_config.yml _plugins _layouts assets index.md story.md CNAME].each do |path|
         FileUtils.cp_r(File.join(root, path), source)
     end
     FileUtils.mkdir_p(File.join(source, "content/haiku"))
@@ -417,6 +419,8 @@ Dir.mktmpdir("pelgish-check-") do |source|
     output = build(source)
     check_home(File.read(File.join(output, "index.html")))
     check(!File.exist?(File.join(root, "index.html")), "Duplicate root source")
+    check(!File.exist?(File.join(root, "story.html")), "Story listing source must be Markdown only")
+    check(!File.exist?(File.join(output, "story.md")), "Raw story listing Markdown leaked")
     check(!File.exist?(File.join(output, "index.md")), "Raw home Markdown leaked")
     random_path = File.join(output, "haiku/random.html")
     empty_random = File.read(random_path)
@@ -424,6 +428,61 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(!File.exist?(File.join(output, "haiku/_random.html")) &&
           !File.exist?(File.join(output, "content")), "Underscore source leaked or ignored its permalink")
     check(!frontmatter(structural_source).key?("published_timestamp"), "Structural page needs no publication timestamp")
+
+    # The static story listing is empty until actual story sources opt in.
+    story_path = File.join(output, "story.html")
+    empty_story = File.read(story_path)
+    check(empty_story.match?(/<h1\b[^>]*>Short Stories<\/h1>/) &&
+          empty_story.include?("No short stories have been published yet.") &&
+          empty_story.include?('rel="canonical" href="https://pelgish.ink/story"') &&
+          !File.exist?(File.join(output, "story")),
+          "Empty story listing must use a slashless canonical with HTML backing")
+    story_fixtures = {
+        "story/alpha.md" => "title: 'A <script> & \"story\"'\npublished: true\n",
+        "story/nested/untitled.md" => "published: true\n",
+        "story/blank.md" => "title: '  '\npublished: true\n",
+        "story/override.md" => "title: Override\npublished: true\npermalink: /elsewhere/story.html\n",
+        "story/draft.md" => "title: Explicit draft\npublished: false\n",
+        "story/implicit.md" => "title: Implicit draft\n",
+        "story/index.md" => "title: Structural index\npublished: true\n",
+        "story/nested/random.md" => "title: Structural random\npublished: true\n",
+        "story/structure.md" => "title: Structural page\npublished: true\nliterary_content: false\n",
+        "story/not-markdown.html" => "title: HTML page\npublished: true\n",
+        "storyish/other.md" => "title: Other folder\npublished: true\npermalink: /story/other\n"
+    }
+    story_fixtures.each do |name, metadata|
+        path = File.join(source, "content", name)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, "---\n#{metadata}---\nFixture body.\n")
+    end
+    [false, true].product(["", "/preview"]).each do |unpublished, baseurl|
+        build(source, "unpublished" => unpublished, "baseurl" => baseurl)
+        html = File.read(story_path)
+        main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
+        expected = [
+            ["/story/alpha", "A &lt;script&gt; &amp; &quot;story&quot;"],
+            ["/story/blank", "blank"],
+            ["/elsewhere/story", "Override"],
+            ["/story/nested/untitled", "untitled"]
+        ].map { |url, title| [baseurl + url, title] }
+        links = main.scan(/<li><a href="([^"]+)">([^<]*)<\/a><\/li>/)
+        check(links == expected,
+              "Story list must include only published Markdown stories, safely titled and deterministically ordered: #{links.inspect}")
+        check(!main.include?("No short stories") && !main.include?("<script") &&
+              !main.include?("<time") && !main.include?("Fixture body."),
+              "Story listing must be static links without bodies, dates, or client fetching")
+        check(html.include?("rel=\"canonical\" href=\"https://pelgish.ink#{baseurl}/story\"") &&
+              html.include?("href=\"#{baseurl}/assets/css/style.css\"") &&
+              html.include?('id="appearance-toggle"') &&
+              html.include?('data-color-scheme="grapevine"') &&
+              html.include?('family=Cantarell:') &&
+              html.scan(/<header class="site-header">/).length == 1,
+              "Story listing must retain the shared shell, theme, fonts, and baseurl")
+        check_home(File.read(File.join(output, "index.html")))
+    end
+    story_fixtures.each_key { |name| File.unlink(File.join(source, "content", name)) }
+    build(source)
+    puts "PASS: static story listing empty/multiple, drafts in previews, nested sources, overrides, escaped/fallback titles, structural exclusions, baseurl, and home link"
 
     # Native underscore discovery and URL serialization also work with exactly one target.
     single = File.join(source, "content/haiku/only.md")
@@ -553,6 +612,13 @@ Dir.mktmpdir("pelgish-check-") do |source|
                   "Draft preview must serve random page without draft targets")
             check(request.call(port, "/haiku/random.html").body == random_response.body,
                   "Random slashless route must match its HTML backing")
+            story_response = request.call(port, "/story")
+            check(story_response.code == "200" && story_response["location"].nil? &&
+                  story_response["content-type"].include?("text/html") &&
+                  story_response.body.include?('rel="canonical" href="http://127.0.0.2:3999/story"') &&
+                  story_response.body.include?("No short stories have been published yet.") &&
+                  request.call(port, "/story.html").body == story_response.body,
+                  "Story slashless preview must directly serve its HTML backing and empty listing")
             urls.each_value do |path|
                 response = request.call(port, path)
                 check(response.code == "200" && response["location"].nil? &&
@@ -600,7 +666,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
 
     # Random targets follow source membership, publication, and generated URLs.
     random = File.read(random_path)
-    check(random.include?("<title>Random haiku</title>"), "Random document title must match frontmatter")
+    random_title = frontmatter(structural_source)["title"]
+    random_title = YAML.safe_load(original_config).fetch("title") if random_title.to_s.empty?
+    check(random.include?("<title>#{CGI.escapeHTML(random_title)}</title>"),
+          "Random document title must match frontmatter or the shared site-title fallback")
     expected_targets = published_names.select { |name| name.start_with?("haiku/") }.map { |name| urls.fetch(name) }
     check(random_targets(random).sort == expected_targets.sort, "Random page targets differ from published source haikus")
     check(!File.exist?(File.join(output, "haiku/random")), "Random route must use HTML backing")
