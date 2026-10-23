@@ -14,8 +14,10 @@ def check(condition, message)
 end
 
 # Home retains its shell but never enumerates writing, including draft previews.
-def check_blank_home(html)
-    check(html[/<main\b[^>]*>(.*?)<\/main>/m, 1]&.strip == "", "Home main must be empty")
+def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.year}")
+    main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
+    check(main&.strip&.match?(/\A<section aria-label="Copyright">\s*<p>All content here is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<\/section>\z/),
+          "Home must contain only its copyright section with years #{years}")
     check(html.include?('rel="canonical"') && html.include?('class="site-header"'), "Home shell missing")
 end
 
@@ -354,8 +356,36 @@ Dir.mktmpdir("pelgish-check-") do |source|
     structural_source = File.join(source, "content/haiku/_random.md")
     FileUtils.cp(File.join(root, "content/haiku/_random.md"), structural_source)
     structural_bytes = File.binread(structural_source)
+
+    # Control build time and YAML types to verify single years, ranges, and fallback.
+    config_path = File.join(source, "_config.yml")
+    original_config = File.read(config_path)
+    [
+        [2026, 2026, "2026"],
+        ["2026", 2026, "2026"],
+        [2026, 2027, "2026-2027"],
+        ["2026", 2027, "2026-2027"],
+        [nil, 2026, "2026"],
+        [nil, 2027, "2026-2027"],
+        [2025, 2027, "2025-2027"]
+    ].each do |start_year, end_year, expected|
+        config = YAML.safe_load(original_config)
+        if start_year.nil?
+            config.delete("copyright_start_year")
+        else
+            config["copyright_start_year"] = start_year
+        end
+        File.write(config_path, YAML.dump(config))
+        output = build(source, "time" => Time.utc(end_year, 6, 15))
+        check_home(File.read(File.join(output, "index.html")), expected)
+        check(random_targets(File.read(File.join(output, "haiku/random.html"))) == [],
+              "Copyright must not leak into the blank random page")
+    end
+    File.write(config_path, original_config)
+    puts "PASS: home-only copyright, numeric/string start years, missing-setting fallback, and controlled build-year ranges"
+
     output = build(source)
-    check_blank_home(File.read(File.join(output, "index.html")))
+    check_home(File.read(File.join(output, "index.html")))
     check(!File.exist?(File.join(root, "index.html")), "Duplicate root source")
     check(!File.exist?(File.join(output, "index.md")), "Raw home Markdown leaked")
     random_path = File.join(output, "haiku/random.html")
@@ -409,7 +439,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     fixtures.each_key do |name|
         check(!File.exist?(output_path.call(output, name)), "Default-unpublished URL leaked: #{name}")
     end
-    check_blank_home(index)
+    check_home(index)
     FileUtils.rm_r(output)
     # Use a fixed second loopback address so the user's localhost previews stay untouched.
     # CI and automatic local setup target Linux, where 127.0.0.2 is also loopback.
@@ -484,7 +514,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
             next unless index.zero?
 
             preview_index = request.call(port, "/").body
-            check_blank_home(preview_index)
+            check_home(preview_index)
             random_response = request.call(port, "/haiku/random")
             # Jekyll's development server injects a nonvisual LiveReload script.
             preview_random = random_response.body.sub(/<script>\s*document\.write\(.*?livereload\.js.*?<\/script>/m, "")
@@ -550,10 +580,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
           "Baseurl/draft preview changed random membership or omitted URL prefix")
     output = build(source)
 
-    # Check the blank home, content URLs, layouts, and shared shell independently.
+    # Check the home copyright, content URLs, layouts, and shared shell independently.
     check(!File.exist?(File.join(output, "writing")), "Stale writing-prefix output survived rebuild")
     check(!index.include?('href="/writing/'), "Index contains a writing-prefix link")
-    check_blank_home(index)
+    check_home(index)
     check(index.include?('rel="canonical" href="https://pelgish.ink/"'), "Root canonical must retain its slash")
     check(!File.exist?(File.join(output, "content")) && !index.include?('href="/content/'),
           "Content-prefix output leaked")
@@ -562,6 +592,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?("href=\"https://pelgish.ink#{urls.fetch(name)}\""),
               "Canonical URL incorrect: #{name}")
         check(!html.include?("All writing") && !html.include?("<footer"), "Empty writing footer survived")
+        check(!html.include?("All content here is copyright(c)"), "Home copyright leaked into writing: #{name}")
         route = File.join(output, urls.fetch(name).delete_prefix("/"))
         check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
         check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
@@ -621,7 +652,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     html = File.read(File.join(output, "haiku/manual.html"))
     check(html.include?("Manual body.") && !html.include?("<time"), "Manual publication did not work")
     check(html.include?('rel="canonical" href="https://pelgish.ink/haiku/manual"'), "Manual publication canonical missing")
-    check_blank_home(File.read(File.join(output, "index.html")))
+    check_home(File.read(File.join(output, "index.html")))
 
     # Unpublishing an override retains its metadata/body and removes its custom URL.
     path = File.join(source, "content/stable.md")
@@ -682,7 +713,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
 end
 
-puts "PASS: blank random redirect, underscore discovery, published-only targets, route collisions, empty index, prose, verse, themes, URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
+puts "PASS: blank random redirect, underscore discovery, published-only targets, route collisions, home copyright, prose, verse, themes, URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
 
 # Verify the actual palette tokens against WCAG text/control contrast thresholds.
 css = File.read(File.join(root, "assets/css/style.css"))

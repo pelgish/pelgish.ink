@@ -4,6 +4,7 @@ description: Creative writing from Connor
 url: "https://pelgish.ink"
 baseurl: ""
 lang: en
+copyright_start_year: 2026
 
 defaults:
     - scope:
