@@ -1,14 +1,9 @@
-# Static site and standalone writing collection.
+# Static site and opt-in Markdown writing under content/.
 title: pelgish.ink
 description: Creative writing from Connor
 url: "https://pelgish.ink"
 baseurl: ""
 lang: en
-
-collections:
-    writing:
-        output: true
-        permalink: /:path/
 
 defaults:
     - scope:
@@ -17,11 +12,12 @@ defaults:
           layout: default
           reading_theme: paper
     - scope:
-          path: ""
-          type: writing
+          path: content/
+          type: pages
       values:
           layout: prose
           published: false
+          literary_content: true
 
 markdown: kramdown
 kramdown:

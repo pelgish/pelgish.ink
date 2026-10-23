@@ -1,6 +1,6 @@
 # [pelgish.ink](https://pelgish.ink)
 
-Connor's creative writing website.
+Creative works by Connor.
 
 ## Local setup and preview
 
@@ -22,6 +22,4 @@ For the same production build and regression check used in CI:
 ./scripts/bundle.sh exec ruby scripts/check.rb
 JEKYLL_ENV=production ./scripts/bundle.sh exec jekyll build --trace
 ```
-
-</details>
 
