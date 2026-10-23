@@ -10,7 +10,7 @@ defaults:
           path: ""
       values:
           layout: default
-          reading_theme: paper
+          color_scheme: grapevine
     - scope:
           path: content/
           type: pages

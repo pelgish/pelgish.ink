@@ -1,21 +1,28 @@
 <!doctype html>
-<!-- Shared, script-free reading shell. -->
-<html lang="{{ page.lang | default: site.lang | escape }}">
+<!-- Shared reading shell: palette is independent of light/dark appearance. -->
+<!-- Explicit reading_theme paper/ink hints light/dark; a saved user choice wins. -->
+<html lang="{{ page.lang | default: site.lang | escape }}" data-color-scheme="{{ page.color_scheme | default: 'grapevine' | validated_color_scheme }}"{% if page.reading_theme == 'ink' %} data-appearance="dark"{% elsif page.reading_theme == 'paper' %} data-appearance="light"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
     <meta name="description" content="{{ page.description | default: site.description | escape }}">
     <link rel="canonical" href="{{ page.url | absolute_url }}">
+    <!-- Initialize appearance before styles paint; enhance the button after parsing. -->
+    <script src="{{ '/assets/js/appearance.js' | relative_url }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cantarell:ital,wght@0,400;0,700;1,400&amp;family=Fondamento&amp;display=swap">
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
 </head>
-<body{% if page.reading_theme == 'ink' %} class="theme-ink"{% endif %}>
+<body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
         <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title | escape }}</a>
         <nav aria-label="Main">
             <a href="{{ '/' | relative_url }}">Writing</a>
         </nav>
+        <button id="appearance-toggle" type="button" hidden>Switch appearance</button>
     </header>
     <main id="main" tabindex="-1">
         {{ content }}

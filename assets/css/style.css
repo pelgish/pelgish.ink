@@ -1,20 +1,40 @@
-/* Local system fonts and two frontmatter-selectable reading palettes. */
-:root {
+/* Each page selects a palette; appearance selects its light or dark roles. */
+:root[data-color-scheme="grapevine"] {
     color-scheme: light;
-    --background: #faf8f3;
-    --foreground: #272722;
-    --muted: #59594f;
-    --link: #365845;
-    --rule: #d3d0c6;
+    --background: #F3F5F0;
+    --foreground: #5C574F;
+    --heading: #48483A;
+    --muted: #5C574F;
+    --link: #48483A;
+    --rule: #74776B;
+    --accent: #A28F9D;
+    --dark-background: #151C17;
+    --dark-foreground: #F3F5F0;
+    --dark-heading: #F3F5F0;
+    --dark-muted: #A28F9D;
+    --dark-link: #F3F5F0;
 }
 
-.theme-ink {
+/* Shared appearance wiring also works for future palettes with dark tokens. */
+:root[data-appearance="dark"] {
     color-scheme: dark;
-    --background: #1d2321;
-    --foreground: #eeeee6;
-    --muted: #bcbfb5;
-    --link: #b7d8c0;
-    --rule: #505952;
+    --background: var(--dark-background);
+    --foreground: var(--dark-foreground);
+    --heading: var(--dark-heading);
+    --muted: var(--dark-muted);
+    --link: var(--dark-link);
+}
+
+/* System preference remains useful without JavaScript or a page hint. */
+@media (prefers-color-scheme: dark) {
+    :root[data-color-scheme]:not([data-appearance]) {
+        color-scheme: dark;
+        --background: var(--dark-background);
+        --foreground: var(--dark-foreground);
+        --heading: var(--dark-heading);
+        --muted: var(--dark-muted);
+        --link: var(--dark-link);
+    }
 }
 
 * {
@@ -24,11 +44,11 @@
 html {
     background: var(--background);
     color: var(--foreground);
-    font: 112.5% / 1.75 Georgia, "Times New Roman", serif;
+    font: 112.5% / 1.75 "Cantarell", system-ui, sans-serif;
     overflow-wrap: anywhere;
 }
 
-/* Keep theme colors on body too, so the chosen palette covers the viewport. */
+/* Cover the viewport with the selected palette. */
 body {
     background: var(--background);
     color: var(--foreground);
@@ -53,7 +73,7 @@ a:hover {
 
 .site-header {
     align-items: baseline;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 2px solid var(--accent);
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 2rem;
@@ -63,14 +83,34 @@ a:hover {
 
 .site-title {
     font-size: 1.2rem;
-    font-weight: bold;
+}
+
+button, input, select, textarea {
+    font: inherit;
+}
+
+#appearance-toggle {
+    background: var(--background);
+    border: 1px solid var(--rule);
+    border-radius: 0.25rem;
+    color: var(--foreground);
+    cursor: pointer;
+    min-height: 44px;
+    padding: 0.25rem 0.75rem;
+}
+
+#appearance-toggle:hover {
+    text-decoration: underline;
 }
 
 main {
     margin: 3rem 0 4rem;
 }
 
-h1, h2, h3 {
+h1, h2, h3, h4, h5, h6, .site-title {
+    color: var(--heading);
+    font-family: "Fondamento", Georgia, serif;
+    font-weight: 400;
     line-height: 1.25;
     text-wrap: balance;
 }

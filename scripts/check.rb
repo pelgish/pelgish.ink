@@ -335,7 +335,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         "poem" => "---\ntitle: 'Verse fixture'\nlayout: poetry\nreading_theme: ink\n---\nLine one\\\nLine two\n\nStanza two.\n",
         "draft" => "---\ntitle: 'Unpublished fixture'\nlayout: prose\n---\nDraft body.\n",
         "explicit-draft" => "---\ntitle: 'Explicit draft'\npublished: false\n---\nDraft body.\n",
-        "stable" => "---\ntitle: 'Stable URL'\npermalink: /custom/path\n---\nStable body.\n",
+        "stable" => "---\ntitle: 'Stable URL'\npermalink: /custom/path\ncolor_scheme: grapevine\nreading_theme: paper\n---\nStable body.\n",
         "haiku/haiku1" => "---\ntitle: 'Haiku fixture'\nlayout: poetry\n---\nFixture body.\n",
         "haiku/20260620-001" => "---\nlayout: poetry\n---\nUntitled fixture body.\n",
         "haiku/nested/haiku1" => "---\ntitle: 'Nested fixture'\nlayout: poetry\n---\nNested body.\n",
@@ -506,13 +506,24 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
     check(prose.include?("<p>Paragraph one.</p>") && prose.include?("<p>Paragraph two.</p>"), "Prose paragraphs missing")
     check(poem.include?('<article class="writing poetry">'), "Poetry layout missing")
-    check(poem.include?('<body class="theme-ink">'), "Ink theme missing")
-    check(prose.include?("<body>"), "Default paper theme missing")
+    check(poem.include?('data-appearance="dark"'), "Explicit ink appearance hint missing")
+    check(!prose.include?("data-appearance="), "Default must allow the system appearance")
+    stable = File.read(File.join(output, "custom/path.html"))
+    check(stable.include?('data-appearance="light"'), "Explicit paper appearance hint missing")
+    [index, prose, poem, stable].each do |html|
+        check(html.include?('data-color-scheme="grapevine"'), "Default/explicit palette hook missing")
+        check(html.include?('href="https://fonts.googleapis.com/css2?family=Cantarell:ital,wght@0,400;0,700;1,400&amp;family=Fondamento&amp;display=swap"'),
+              "Official font stylesheet or requested styles missing")
+        check(html.include?('id="appearance-toggle" type="button" hidden'), "Toggle must start hidden without JS")
+        check(html.index('src="/assets/js/appearance.js"') < html.index('href="/assets/css/style.css"'),
+              "Appearance must initialize before local CSS")
+    end
     check(poem.match?(/<p>Line one<br\s*\/?>\s*Line two<\/p>/), "Verse line break missing")
     check(poem.include?("<p>Stanza two.</p>"), "Separate verse stanza missing")
     check(prose.include?('href="/assets/css/style.css"'), "Stylesheet URL incorrect")
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
+    check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
     check(!index.include?("Unpublished fixture"), "Draft leaked into index")
     check(!File.exist?(File.join(output, "draft.html")), "Draft page leaked")
@@ -541,6 +552,19 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(!File.exist?(File.join(output, "custom/path.html")), "Unpublished override survived rebuild")
     check(!File.read(File.join(output, "index.html")).include?('href="/custom/path"'), "Unpublished override link survived")
 
+    # Unsupported palettes must fail explicitly instead of emitting unstyled pages.
+    invalid_scheme = File.join(source, "content/unknown-scheme.md")
+    File.write(invalid_scheme, "---\npublished: true\ncolor_scheme: unknown\n---\nBody.\n")
+    begin
+        build(source)
+        raise "Unknown palette was accepted"
+    rescue Jekyll::Errors::FatalException => error
+        check(error.message.include?("Unknown color_scheme") && error.message.include?("grapevine"),
+              "Missing actionable palette error")
+    ensure
+        File.unlink(invalid_scheme)
+    end
+
     # Bare Markdown must fail clearly rather than copying a draft as a public asset.
     File.write(File.join(source, "content/bare.md"), "Private draft without frontmatter\n")
     begin
@@ -553,3 +577,24 @@ Dir.mktmpdir("pelgish-check-") do |source|
 end
 
 puts "PASS: empty index, prose, verse, themes, nested/default/override URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
+
+# Verify the actual palette tokens against WCAG text/control contrast thresholds.
+css = File.read(File.join(root, "assets/css/style.css"))
+colors = css.scan(/--([\w-]+):\s*(#[0-9A-Fa-f]{6});/).to_h
+luminance = lambda do |hex|
+    channels = hex.delete_prefix("#").scan(/../).map do |channel|
+        value = channel.to_i(16) / 255.0
+        value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055)**2.4
+    end
+    channels.zip([0.2126, 0.7152, 0.0722]).sum { |value, weight| value * weight }
+end
+["", "dark-"].each do |prefix|
+    background = luminance.call(colors.fetch("#{prefix}background"))
+    %w[foreground heading muted link rule].each do |role|
+        foreground = luminance.call(colors.fetch(role == "rule" ? role : "#{prefix}#{role}"))
+        contrast = ([background, foreground].max + 0.05) / ([background, foreground].min + 0.05)
+        check(contrast >= (role == "rule" ? 3 : 4.5), "#{prefix}#{role} contrast too low: #{contrast.round(2)}")
+        puts "Contrast #{prefix}#{role}: #{contrast.round(2)}:1"
+    end
+end
+puts "PASS: grapevine light/dark normal text, links, muted text, headings, focus colors, and control borders"
