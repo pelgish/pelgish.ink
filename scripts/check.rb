@@ -570,6 +570,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
 
     # Random targets follow source membership, publication, and generated URLs.
     random = File.read(random_path)
+    check(random.include?("<title>Random haiku</title>"), "Random document title must match frontmatter")
     expected_targets = published_names.select { |name| name.start_with?("haiku/") }.map { |name| urls.fetch(name) }
     check(random_targets(random).sort == expected_targets.sort, "Random page targets differ from published source haikus")
     check(!File.exist?(File.join(output, "haiku/random")), "Random route must use HTML backing")
@@ -603,10 +604,12 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
     check(prose.include?('<article class="writing prose">'), "Prose layout missing")
     check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
+    check(prose.include?("<title>A &amp; B</title>"), "Document title must match escaped frontmatter without a suffix")
     check(prose.include?("<p>Paragraph one.</p>") && prose.include?("<p>Paragraph two.</p>"), "Prose paragraphs missing")
     check(poem.include?('<article class="writing poetry">'), "Poetry layout missing")
     check(poem.include?("<h1>Verse fixture</h1>"), "Authored poetry title missing")
     untitled = File.read(output_path.call(output, "haiku/20260620-001"))
+    check(untitled.include?("<title>pelgish.ink</title>"), "Untitled document must fall back to the site title")
     check(untitled.include?("<p>Untitled fixture body.</p>"), "Untitled haiku content missing")
     check(!untitled.match?(/<h1\b[^>]*>\s*\S.*?<\/h1>/m), "Untitled haiku gained an automatic heading")
     check(poem.include?('data-appearance="dark"'), "Explicit ink appearance hint missing")

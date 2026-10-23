@@ -25,7 +25,7 @@ literary_content: false
 <html lang="{{ site.lang | escape }}">
 <head>
     <meta charset="utf-8">
-    <title>{{ page.title | escape }}</title>
+    <title>{{ page.title | default: site.title | escape }}</title>
     <link rel="canonical" href="{{ page.url | absolute_url | escape }}">
     <script id="haiku-targets" type="application/json">[{{ targets }}]</script>
     <script src="{{ '/assets/js/random-haiku.js' | relative_url }}" defer></script>
