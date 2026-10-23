@@ -77,7 +77,7 @@ a:hover {
 }
 
 .site-header {
-    align-items: baseline;
+    align-items: center;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 2rem;
@@ -93,35 +93,82 @@ button, input, select, textarea {
     font: inherit;
 }
 
-#appearance-toggle {
-    background: var(--background);
-    border: 1px solid var(--rule);
-    border-radius: 0.25rem;
+.icon-control,
+.icon-control:visited,
+.icon-control:focus,
+.icon-control:active {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     color: var(--foreground);
     cursor: pointer;
     flex-shrink: 0;
     min-height: 44px;
     min-width: 44px;
-    padding: 0.25rem 0.75rem;
+    padding: 0;
 }
 
-/* Center the glyph without exposing an inert control when JavaScript is off. */
-#appearance-toggle:not([hidden]) {
+/* Hidden controls stay hidden until their behavior is ready. */
+.icon-control:not([hidden]) {
     align-items: center;
     display: inline-flex;
     justify-content: center;
 }
 
-#appearance-toggle:hover {
+.icon-control:hover {
     color: var(--accent-link);
 }
 
-#appearance-toggle svg {
-    fill: currentColor;
+.icon-control:disabled {
+    cursor: not-allowed;
+}
+
+/* Alpha masks retain each PNG silhouette while following any palette's color. */
+.control-icon {
+    background: currentColor;
+    display: inline-block;
     flex-shrink: 0;
-    height: 1.1em;
-    width: 1.1em;
-    vertical-align: middle;
+    height: 2rem;
+    width: 2rem;
+    -webkit-mask: var(--icon-image) center / contain no-repeat;
+    mask: var(--icon-image) center / contain no-repeat;
+}
+
+.icon-haiku {
+    --icon-image: url("../images/icon_haiku.png");
+}
+
+.icon-shortstory {
+    --icon-image: url("../images/icon_shortstory.png");
+}
+
+.appearance-moon {
+    --icon-image: url("../images/icon_moon.png");
+}
+
+.appearance-sun {
+    --icon-image: url("../images/icon_sun.png");
+}
+
+.home-controls {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.home-controls .icon-control {
+    gap: 1rem;
+    max-width: 100%;
+    text-align: left;
+}
+
+.home-controls .control-icon {
+    height: clamp(80px, 24vw, 112px);
+    width: clamp(80px, 24vw, 112px);
 }
 
 /* The visible glyph represents the next action, not the current mode. */
@@ -131,7 +178,7 @@ button, input, select, textarea {
 }
 
 :root[data-appearance="dark"] .appearance-sun {
-    display: inline;
+    display: inline-block;
 }
 
 /* Leave room for navigation and a full touch target on narrow screens. */
@@ -146,13 +193,36 @@ button, input, select, textarea {
     }
 
     #appearance-toggle {
-        padding: 0.25rem;
         width: 44px;
     }
 }
 
 main {
     margin: 3rem 0 4rem;
+}
+
+/* Home's copyright rests at the viewport bottom, without covering content. */
+.home-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+}
+
+.home-page main {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+.home-copyright {
+    font-size: 0.8rem;
+    margin-top: auto;
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.home-copyright p {
+    margin: 0;
 }
 
 h1, h2, h3, h4, h5, h6, .site-title {

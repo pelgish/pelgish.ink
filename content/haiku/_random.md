@@ -1,6 +1,6 @@
 ---
-layout: null
-title: Random haiku
+layout: default
+title: ""
 permalink: /haiku/random
 published: true
 literary_content: false
@@ -21,15 +21,9 @@ literary_content: false
     {%- endfor -%}
 {%- endcapture -%}
 {::nomarkdown}
-<!doctype html>
-<html lang="{{ site.lang | escape }}">
-<head>
-    <meta charset="utf-8">
-    <title>{{ page.title | default: site.title | escape }}</title>
-    <link rel="canonical" href="{{ page.url | absolute_url | escape }}">
-    <script id="haiku-targets" type="application/json">[{{ targets }}]</script>
-    <script src="{{ '/assets/js/random-haiku.js' | relative_url }}" defer></script>
-</head>
-<body></body>
-</html>
+<p id="haiku-status" role="status" hidden></p>
+<div id="haiku-content"></div>
+<noscript><p>Enable JavaScript to read a random haiku on this page.</p></noscript>
+<script id="haiku-targets" type="application/json">[{{ targets }}]</script>
+<script src="{{ '/assets/js/random-haiku.js' | relative_url }}" defer></script>
 {:/nomarkdown}

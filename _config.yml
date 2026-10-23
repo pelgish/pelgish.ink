@@ -30,6 +30,7 @@ include:
     - content/haiku/_random.md
 
 exclude:
+    - "**/*:sec.endpointdlp"
     - README.md
     - Gemfile
     - Gemfile.lock

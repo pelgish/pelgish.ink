@@ -16,27 +16,57 @@ end
 # Home retains its shell but never enumerates writing, including draft previews.
 def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.year}")
     main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
-    check(main&.strip&.match?(/\A<section aria-label="Copyright">\s*<p>All content here is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<\/section>\z/),
-          "Home must contain only its copyright section with years #{years}")
+    controls = main&.slice!(/<section class="home-controls" aria-label="Explore writing">.*?<\/section>/m)
+    check(controls, "Home icon controls missing")
+    prefix = html[/href="([^"]*)\/assets\/css\/style.css"/, 1]
+    check(controls.include?("href=\"#{prefix}/haiku/random\"") &&
+          controls.include?('aria-label="Haikus (read a random haiku)"'), "Haiku control must link to the random route")
+    check(controls.match?(/<button class="icon-control" type="button" disabled(?:="")? aria-label="Short Stories \(not available yet\)"/) &&
+          controls.scan(/\bhref=/).length == 1, "Short stories must be disabled with no navigation")
+    check(controls.match?(/icon-haiku" aria-hidden="true"><\/span>\s*<span>Haikus<\/span>/) &&
+          controls.match?(/icon-shortstory" aria-hidden="true"><\/span>\s*<span>Short Stories<\/span>/),
+          "Home categories must show their visible labels after the icons")
+    %w[haiku shortstory].each do |icon|
+        check(controls.include?("<span class=\"control-icon icon-#{icon}\" aria-hidden=\"true\"></span>"),
+              "Decorative home #{icon} icon missing")
+    end
+    check(main&.strip&.match?(/\A<section class="home-copyright" aria-label="Copyright">\s*<p>All content on this site is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<\/section>\z/),
+          "Home must contain only its icon controls and unchanged copyright with years #{years}")
+    check(html.index(controls) < html.index('class="home-copyright"'), "Controls must precede copyright")
+    check(html.include?('<body class="home-page">'), "Home-only viewport layout hook missing")
     check(html.include?('rel="canonical"') && html.include?('class="site-header"'), "Home shell missing")
 end
 
-# The redirect has only nonvisual metadata/scripts and a genuinely empty body.
+# The reader shares the site shell and exposes its host, status, and target list.
 def random_targets(html)
-    check(html.match?(/\A<!doctype html>\s*<html\b/i) && html.rstrip.end_with?("</html>"),
+    check(html.match?(/\A<!doctype html>(?:\s|<!--.*?-->)*<html\b/im) && html.rstrip.end_with?("</html>"),
           "Random page must be a complete HTML document")
-    check(html[/<body>(.*?)<\/body>/m, 1]&.strip == "", "Random page body must be empty without JS")
-    check(html.scan(/<([a-z][a-z0-9-]*)\b/i).flatten.sort ==
-          %w[body head html link meta script script title].sort,
-          "Random page contains visible shell, fallback, or unnecessary resources")
-    check(html.include?('<meta charset="utf-8">') &&
-          html.scan(/<script\b[^>]*src=/).length == 1 &&
-          html.include?('/assets/js/random-haiku.js" defer>'),
-          "Random page must load only its redirect script")
+    check(html.scan(/<header class="site-header">/).length == 1 &&
+          html.scan(/<main id="main" tabindex="-1">/).length == 1 &&
+          html.include?('id="appearance-toggle" class="icon-control" type="button" hidden'),
+          "Random reader must use one shared shell with the appearance control")
+    main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
+    check(main&.match?(/<div id="haiku-content">\s*<\/div>/) &&
+          main.match?(/<p id="haiku-status" role="status" hidden(?:="")?>\s*<\/p>/),
+          "Random reader must start with an empty content host and hidden accessible status")
+    check(main.match?(/<noscript>\s*<p>Enable JavaScript to read a random haiku on this page\.<\/p>\s*<\/noscript>/),
+          "Random reader must explain the JavaScript requirement without JS")
+    check(!html.include?('class="home-page"') && !html.include?('class="home-copyright"') &&
+          !html.include?("All content on this site is copyright(c)"),
+          "Home layout or copyright leaked into the random reader")
     canonical = html[/rel="canonical" href="([^"]+)"/, 1]
     check(canonical && URI(canonical).path.delete_prefix("/preview") == "/haiku/random",
           "Random canonical must be slashless")
-    JSON.parse(html[/<script id="haiku-targets" type="application\/json">(.*?)<\/script>/m, 1])
+    prefix = URI(canonical).path.delete_suffix("/haiku/random")
+    check(html.include?('<meta charset="utf-8">') &&
+          html.scan(/<script\b[^>]*src="([^"]+)"/).flatten ==
+              ["#{prefix}/assets/js/appearance.js", "#{prefix}/assets/js/random-haiku.js"] &&
+          html.include?("src=\"#{prefix}/assets/js/random-haiku.js\" defer>") &&
+          html.include?("href=\"#{prefix}/assets/css/style.css\""),
+          "Random reader must load the shared appearance/styles and deferred reader with the URL prefix")
+    check(main.scan(/<script id="haiku-targets" type="application\/json">/).length == 1,
+          "Random reader must have exactly one generated target list")
+    JSON.parse(main[/<script id="haiku-targets" type="application\/json">(.*?)<\/script>/m, 1])
 end
 
 # Use the same configuration as the real site, with temporary source/output paths.
@@ -379,10 +409,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
         output = build(source, "time" => Time.utc(end_year, 6, 15))
         check_home(File.read(File.join(output, "index.html")), expected)
         check(random_targets(File.read(File.join(output, "haiku/random.html"))) == [],
-              "Copyright must not leak into the blank random page")
+              "Random reader must exclude itself when no haiku are published")
     end
     File.write(config_path, original_config)
-    puts "PASS: home-only copyright, numeric/string start years, missing-setting fallback, and controlled build-year ranges"
+    puts "PASS: home controls/copyright, numeric/string start years, missing-setting fallback, and controlled build-year ranges"
 
     output = build(source)
     check_home(File.read(File.join(output, "index.html")))
@@ -390,7 +420,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(!File.exist?(File.join(output, "index.md")), "Raw home Markdown leaked")
     random_path = File.join(output, "haiku/random.html")
     empty_random = File.read(random_path)
-    check(random_targets(empty_random) == [], "Empty random page must exclude itself and stay blank")
+    check(random_targets(empty_random) == [], "Empty random reader must exclude itself")
     check(!File.exist?(File.join(output, "haiku/_random.html")) &&
           !File.exist?(File.join(output, "content")), "Underscore source leaked or ignored its permalink")
     check(!frontmatter(structural_source).key?("published_timestamp"), "Structural page needs no publication timestamp")
@@ -593,7 +623,9 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?("href=\"https://pelgish.ink#{urls.fetch(name)}\""),
               "Canonical URL incorrect: #{name}")
         check(!html.include?("All writing") && !html.include?("<footer"), "Empty writing footer survived")
-        check(!html.include?("All content here is copyright(c)"), "Home copyright leaked into writing: #{name}")
+        check(!html.include?("All content on this site is copyright(c)"), "Home copyright leaked into writing: #{name}")
+        check(!html.include?('class="home-page"') && !html.include?('class="home-copyright"'),
+              "Home viewport layout leaked into writing: #{name}")
         route = File.join(output, urls.fetch(name).delete_prefix("/"))
         check(!File.exist?(route), "Extensionless artifact or directory route leaked: #{name}")
         check(!html.include?("Published") && !html.include?("<time") && !html.include?("published-time"),
@@ -620,11 +652,15 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?('data-color-scheme="grapevine"'), "Default/explicit palette hook missing")
         check(html.include?('href="https://fonts.googleapis.com/css2?family=Cantarell:ital,wght@0,400;0,700;1,400&amp;family=Fondamento&amp;display=swap"'),
               "Official font stylesheet or requested styles missing")
-        check(html.include?('id="appearance-toggle" type="button" hidden'), "Toggle must start hidden without JS")
+        check(html.include?('id="appearance-toggle" class="icon-control" type="button" hidden'), "Toggle must start hidden without JS")
+        header = html[/<header class="site-header">(.*?)<\/header>/m, 1]
+        check(header && header.scan(/<a\b/).length == 1 && !header.include?("<nav") &&
+              header.include?('class="site-title" href="/"'), "Header must retain only the title home link and appearance control")
         %w[moon sun].each do |icon|
-            check(html.match?(/<svg class="appearance-#{icon}"[^>]*aria-hidden="true"[^>]*focusable="false"/),
+            check(html.include?("<span class=\"control-icon appearance-#{icon}\" aria-hidden=\"true\"></span>"),
                   "Decorative #{icon} icon missing")
         end
+        check(!html.match?(/Font Awesome|fontawesome|<svg\b|<path\b/i), "Obsolete icon markup or attribution survived")
         check(!html.include?("All writing") && !html.include?("<footer"), "Writing footer survived")
         check(html.index('src="/assets/js/appearance.js"') < html.index('href="/assets/css/style.css"'),
               "Appearance must initialize before local CSS")
@@ -635,11 +671,17 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")
+    %w[haiku shortstory moon sun].each do |icon|
+        asset = "assets/images/icon_#{icon}.png"
+        check(File.binread(File.join(output, asset)) == File.binread(File.join(root, asset)),
+              "Original #{icon} icon was altered or not built")
+    end
+    check(Dir.glob(File.join(output, "**/*:sec.endpointdlp")).empty?, "Image sidecars must not be published")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
     %w[draft explicit-draft haiku/draft].each do |name|
         check(!File.exist?(output_path.call(output, name)), "Draft page leaked: #{name}")
     end
-    check(File.binread(structural_source) == structural_bytes, "Structural redirect was edited by publication tests")
+    check(File.binread(structural_source) == structural_bytes, "Structural reader was edited by publication tests")
 
     # Unpublication deletes persisted fields and removes an already-built public URL.
     path = File.join(source, "content/prose.md")
@@ -677,7 +719,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         File.unlink(invalid_scheme)
     end
 
-    # Reserved route aliases must fail instead of silently overwriting the redirect.
+    # Reserved route aliases must fail instead of silently overwriting the reader.
     collision = File.join(source, "content/haiku/collision.md")
     ["/haiku/random", "/haiku/random.html", "/haiku/random/", "/haiku/random/index.html"].each do |permalink|
         File.write(collision, "---\npublished: true\npermalink: #{permalink}\n---\nCollision.\n")
@@ -716,7 +758,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
 end
 
-puts "PASS: blank random redirect, underscore discovery, published-only targets, route collisions, home copyright, prose, verse, themes, URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
+puts "PASS: shared-shell random reader, status/no-JS host, underscore discovery, published-only targets, route collisions, home copyright, prose, verse, themes, URLs, canonicals, assets, CNAME, drafts, and raw Markdown protection"
 
 # Verify the actual palette tokens against WCAG text/control contrast thresholds.
 css = File.read(File.join(root, "assets/css/style.css"))
@@ -737,4 +779,4 @@ end
         puts "Contrast #{prefix}#{role}: #{contrast.round(2)}:1"
     end
 end
-puts "PASS: grapevine light/dark normal text, links, muted text, headings, focus colors, and control borders"
+puts "PASS: grapevine light/dark normal text, links, muted text, headings, focus colors, and rules"
