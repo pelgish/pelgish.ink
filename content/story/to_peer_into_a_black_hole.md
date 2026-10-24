@@ -1,7 +1,8 @@
 ---
 title: 'To Peer Into a Black Hole'
 layout: 'prose'
-published: false
+published: true
+published_timestamp: "2026-10-24T19:47:45Z"
 ---
 
 
