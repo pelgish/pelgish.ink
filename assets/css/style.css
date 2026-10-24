@@ -85,8 +85,46 @@ a:hover {
     padding: 1.5rem 0;
 }
 
-.site-title {
-    font-size: 1.2rem;
+.site-title,
+.site-title:visited,
+.site-title:hover,
+.site-title:focus {
+    align-items: center;
+    border: 0;
+    color: var(--heading);
+    display: inline-flex;
+    max-width: calc(100% - 44px - 0.75rem);
+    min-height: 44px;
+    width: clamp(144px, 40vw, 176px);
+}
+
+/* Preserve the supplied artwork's 2048 × 640 proportions and alpha silhouette. */
+.site-logo {
+    aspect-ratio: 16 / 5;
+    background: currentColor;
+    display: block;
+    width: 100%;
+    -webkit-mask-image: url("../images/logo.png");
+    mask-image: url("../images/logo.png");
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    mask-mode: alpha;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .site-title:hover {
+        color: var(--accent-link);
+    }
+}
+
+/* Press feedback is unconditional, including touch-and-hold without hover. */
+.site-title:focus-visible,
+.site-title:active {
+    color: var(--accent-link);
 }
 
 button, input, select, textarea {
@@ -326,7 +364,7 @@ main {
     margin: 0;
 }
 
-h1, h2, h3, h4, h5, h6, .site-title {
+h1, h2, h3, h4, h5, h6 {
     color: var(--heading);
     font-family: "Fondamento", Georgia, serif;
     font-weight: 400;

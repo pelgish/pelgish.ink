@@ -14,12 +14,21 @@ def check(condition, message)
     raise message unless condition
 end
 
+# Every shared shell keeps the named home link and decorative logo at any baseurl.
+def check_logo(html, prefix = "")
+    header = html[/<header class="site-header">(.*?)<\/header>/m, 1]
+    check(header && header.scan(/<a\b/).length == 1 && !header.include?("<nav") &&
+          header.match?(/<a class="site-title" href="#{Regexp.escape(prefix)}\/" aria-label="pelgish\.ink" title="pelgish\.ink">\s*<span class="site-logo" aria-hidden="true"><\/span>\s*<\/a>/),
+          "Header must retain only the accessible logo home link and appearance control")
+end
+
 # Home retains its shell but never enumerates writing, including draft previews.
 def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.year}")
     main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
     controls = main&.slice!(/<section class="home-controls" aria-label="Explore writing">.*?<\/section>/m)
     check(controls, "Home icon controls missing")
     prefix = html[/href="([^"]*)\/assets\/css\/style.css"/, 1]
+    check_logo(html, prefix)
     check(controls.include?("href=\"#{prefix}/haiku\"") &&
           controls.include?('aria-label="Haikus"'), "Haiku control must link to the haiku listing")
     check(controls.include?("<a class=\"icon-control\" href=\"#{prefix}/story\" aria-label=\"Short Stories\"") &&
@@ -64,6 +73,7 @@ def random_targets(html, kind = "haiku")
     check(canonical && URI(canonical).path.delete_prefix("/preview") == "/#{kind}/random",
           "Random canonical must be slashless")
     prefix = URI(canonical).path.delete_suffix("/#{kind}/random")
+    check_logo(html, prefix)
     check(html.include?('<meta charset="utf-8">') &&
           html.scan(/<script\b[^>]*src="([^"]+)"/).flatten ==
               ["#{prefix}/assets/js/appearance.js", "#{prefix}/assets/js/random-haiku.js"] &&
@@ -923,9 +933,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(html.include?('href="https://fonts.googleapis.com/css2?family=Cantarell:ital,wght@0,400;0,700;1,400&amp;family=Fondamento&amp;display=swap"'),
               "Official font stylesheet or requested styles missing")
         check(html.include?('id="appearance-toggle" class="icon-control" type="button" hidden'), "Toggle must start hidden without JS")
-        header = html[/<header class="site-header">(.*?)<\/header>/m, 1]
-        check(header && header.scan(/<a\b/).length == 1 && !header.include?("<nav") &&
-              header.include?('class="site-title" href="/"'), "Header must retain only the title home link and appearance control")
+        check_logo(html)
         %w[moon sun].each do |icon|
             check(html.include?("<span class=\"control-icon appearance-#{icon}\" aria-hidden=\"true\"></span>"),
                   "Decorative #{icon} icon missing")
@@ -946,6 +954,9 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(File.binread(File.join(output, asset)) == File.binread(File.join(root, asset)),
               "Original #{icon} icon was altered or not built")
     end
+    check(File.binread(File.join(output, "assets/images/logo.png")) ==
+          File.binread(File.join(root, "assets/images/logo.png")),
+          "Original logo was altered or not built")
     check(Dir.glob(File.join(output, "**/*:sec.endpointdlp")).empty?, "Image sidecars must not be published")
     check(File.read(File.join(output, "CNAME")).strip == "pelgish.ink", "Custom domain missing")
     %w[draft explicit-draft haiku/draft].each do |name|

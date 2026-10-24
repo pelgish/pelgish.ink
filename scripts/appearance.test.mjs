@@ -187,12 +187,13 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
 });
 
 test("supplied mask PNGs decode with visible strokes and transparent surrounding pixels", () => {
-    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle"]) {
-        const png = readFileSync(new URL(`../assets/images/icon_${icon}.png`, import.meta.url));
+    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle", "logo"]) {
+        const filename = icon === "logo" ? "logo.png" : `icon_${icon}.png`;
+        const png = readFileSync(new URL(`../assets/images/${filename}`, import.meta.url));
         assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
         const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
-        assert.equal(width, 512);
-        assert.equal(height, 512);
+        assert.equal(width, icon === "logo" ? 2048 : 512);
+        assert.equal(height, icon === "logo" ? 640 : 512);
         assert.equal(png[24], 8);
         assert.equal(png[25], 6, `${icon} requires RGBA transparency`);
         assert.equal(png[28], 0, "non-interlaced PNG");
@@ -223,6 +224,32 @@ test("supplied mask PNGs decode with visible strokes and transparent surrounding
         assert.ok(alpha.includes(0), `${icon} must not render as a solid rectangle`);
         assert.ok(alpha.includes(255), `${icon} must have visible strokes`);
     }
+});
+
+test("shared logo is an accessible home link with proportional theme-tinted artwork", () => {
+    const markup = readFileSync(new URL("../_layouts/default.html", import.meta.url), "utf8");
+    assert.match(markup, /<a class="site-title" href="\{\{ '\/' \| relative_url \}\}" aria-label="pelgish\.ink" title="pelgish\.ink">\s*<span class="site-logo" aria-hidden="true"><\/span>\s*<\/a>/);
+    assert.match(markup, /<title>\{\{ page.title \| default: site.title \| escape \}\}<\/title>/);
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const logo = css.match(/\.site-logo\s*\{([^}]+)\}/)[1];
+    for (const declaration of ["aspect-ratio: 16 / 5", "background: currentColor",
+        "display: block", "width: 100%", "mask-mode: alpha"]) {
+        assert.ok(logo.includes(declaration), declaration);
+    }
+    for (const prefix of ["-webkit-", ""]) {
+        for (const [property, value] of [["image", 'url("../images/logo.png")'],
+            ["position", "center"], ["size", "contain"], ["repeat", "no-repeat"]]) {
+            assert.ok(logo.includes(`\n    ${prefix}mask-${property}: ${value};`));
+        }
+    }
+    assert.match(css, /\.site-title,\s*\.site-title:visited,\s*\.site-title:hover,\s*\.site-title:focus\s*\{[^}]*border: 0;[^}]*color: var\(--heading\);[^}]*max-width: calc\(100% - 44px - 0.75rem\);[^}]*min-height: 44px;[^}]*width: clamp\(144px, 40vw, 176px\)/);
+    const hover = /@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*\.site-title:hover\s*\{\s*color: var\(--accent-link\);/;
+    const active = /\.site-title:focus-visible,\s*\.site-title:active\s*\{\s*color: var\(--accent-link\);/;
+    assert.match(css, hover);
+    assert.match(css, active);
+    assert.ok(css.search(active) > css.search(hover), "Press feedback must follow hover/default rules");
+    assert.doesNotMatch(logo, /transform|animation|transition/);
+    assert.doesNotMatch(css, /h1, h2, h3, h4, h5, h6, \.site-title/);
 });
 
 test("home copyright uses a growing viewport layout, not a fixed overlay", () => {

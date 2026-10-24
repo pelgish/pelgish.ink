@@ -18,7 +18,9 @@
 <body{% if page.url == '/' %} class="home-page"{% endif %}>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
-        <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title | escape }}</a>
+        <a class="site-title" href="{{ '/' | relative_url }}" aria-label="pelgish.ink" title="pelgish.ink">
+            <span class="site-logo" aria-hidden="true"></span>
+        </a>
         <button id="appearance-toggle" class="icon-control" type="button" hidden aria-label="Switch appearance">
             <span class="control-icon appearance-moon" aria-hidden="true"></span>
             <span class="control-icon appearance-sun" aria-hidden="true"></span>

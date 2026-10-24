@@ -23,6 +23,9 @@ jobs:
                   bundler: "4.0.9"
                   bundler-cache: true
             - name: Check generated behavior
+              # Preview HTTP checks require Jekyll's development server URL.
+              env:
+                  JEKYLL_ENV: development
               run: |
                   bash -n scripts/serve.sh
                   bash -n scripts/publish.sh
