@@ -20,8 +20,8 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
     controls = main&.slice!(/<section class="home-controls" aria-label="Explore writing">.*?<\/section>/m)
     check(controls, "Home icon controls missing")
     prefix = html[/href="([^"]*)\/assets\/css\/style.css"/, 1]
-    check(controls.include?("href=\"#{prefix}/haiku/random\"") &&
-          controls.include?('aria-label="Haikus (read a random haiku)"'), "Haiku control must link to the random route")
+    check(controls.include?("href=\"#{prefix}/haiku\"") &&
+          controls.include?('aria-label="Haikus"'), "Haiku control must link to the haiku listing")
     check(controls.include?("<a class=\"icon-control\" href=\"#{prefix}/story\" aria-label=\"Short Stories\"") &&
           controls.scan(/\bhref=/).length == 2 && !controls.include?("disabled"),
           "Short Stories must be an accessible anchor to the slashless listing")
@@ -32,7 +32,7 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
         check(controls.include?("<span class=\"control-icon icon-#{icon}\" aria-hidden=\"true\"></span>"),
               "Decorative home #{icon} icon missing")
     end
-    check(main&.strip&.match?(/\A<section class="home-copyright" aria-label="Copyright">\s*<p>All content on this site is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<\/section>\z/),
+    check(main&.strip&.match?(/\A<section class="home-copyright" aria-label="Copyright">\s*<p>All content on this site is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<p>Writing and images are of my own original creation\.<\/p>\s*<\/section>\z/),
           "Home must contain only its icon controls and unchanged copyright with years #{years}")
     check(html.index(controls) < html.index('class="home-copyright"'), "Controls must precede copyright")
     check(html.include?('<body class="home-page">'), "Home-only viewport layout hook missing")
@@ -53,6 +53,9 @@ def random_targets(html)
           "Random reader must start with an empty content host and hidden accessible status")
     check(main.match?(/<noscript>\s*<p>Enable JavaScript to read a random haiku on this page\.<\/p>\s*<\/noscript>/),
           "Random reader must explain the JavaScript requirement without JS")
+    check(main.match?(/<div id="haiku-content">\s*<\/div>\s*<button id="haiku-another" class="icon-control hero-control" type="button" aria-label="Get a new haiku" title="Get a new haiku" hidden(?:="")?>\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Get a new haiku<\/span>\s*<\/button>/) &&
+          main.scan(/id="haiku-another"/).length == 1,
+          "Accessible arrow-circle button must start hidden and follow the haiku host")
     check(!html.include?('class="home-page"') && !html.include?('class="home-copyright"') &&
           !html.include?("All content on this site is copyright(c)"),
           "Home layout or copyright leaked into the random reader")
@@ -381,7 +384,7 @@ end
 puts "PASS: setup help/errors, missing prerequisites, opt-in/unsupported systems, local locked Bundler, idempotence, and failure propagation"
 
 Dir.mktmpdir("pelgish-check-") do |source|
-    %w[_config.yml _plugins _layouts assets index.md story.md CNAME].each do |path|
+    %w[_config.yml _plugins _layouts assets index.md story.md haiku.md CNAME].each do |path|
         FileUtils.cp_r(File.join(root, path), source)
     end
     FileUtils.mkdir_p(File.join(source, "content/haiku"))
@@ -484,6 +487,70 @@ Dir.mktmpdir("pelgish-check-") do |source|
     build(source)
     puts "PASS: static story listing empty/multiple, drafts in previews, nested sources, overrides, escaped/fallback titles, structural exclusions, baseurl, and home link"
 
+    # Haiku listing uses source membership, safe labels and actual generated routes.
+    haiku_path = File.join(output, "haiku.html")
+    check(File.read(haiku_path).include?("No haikus have been published yet."),
+          "Empty haiku listing must have a meaningful message")
+    check(File.read(File.join(output, "haiku/index.html")) == File.read(haiku_path),
+          "Directory-backed haiku index must match its slashless HTML backing")
+    haiku_fixtures = {
+        "haiku/alpha_verse.md" => "title: 'A <verse> & \"haiku\"'\npublished: true\n",
+        "haiku/nested_folder/blank_title.md" => "title: '  '\npublished: true\n",
+        "haiku/override.md" => "published: true\npermalink: /elsewhere/kept_underscore\n",
+        "haiku/untitled.markdown" => "published: true\n",
+        "haiku/draft.md" => "title: Draft\npublished: false\n",
+        "haiku/implicit.md" => "title: Implicit draft\n",
+        "haiku/structure.md" => "published: true\nliterary_content: false\n",
+        "haikuish/other.md" => "published: true\n",
+        "story/gatekeeper_of_bree.md" => "published: true\n"
+    }
+    haiku_fixtures.each do |name, metadata|
+        path = File.join(source, "content", name)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, "---\n#{metadata}---\nFixture body.\n")
+    end
+    [false, true].product(["", "/preview"]).each do |unpublished, baseurl|
+        build(source, "unpublished" => unpublished, "baseurl" => baseurl)
+        html = File.read(haiku_path)
+        main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
+        check(main.match?(/\A\s*(?:<!--.*?-->\s*)?<h1\b[^>]*>Haikus<\/h1>\s*<a class="icon-control hero-control" href="#{Regexp.escape(baseurl)}\/haiku\/random">\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Read a random haiku<\/span>\s*<\/a>\s*<ul>/m) &&
+              main.scan(/Read a random haiku/).length == 1,
+              "Haiku listing must keep its heading and one labeled arrow-circle control above the list")
+        expected = [
+            ["/haiku/alpha-verse", "A &lt;verse&gt; &amp; &quot;haiku&quot;"],
+            ["/haiku/nested_folder/blank-title", "blank_title"],
+            ["/elsewhere/kept_underscore", "override"],
+            ["/haiku/untitled", "untitled"]
+        ].map { |url, title| [baseurl + url, title] }
+        links = main.scan(/<li><a href="([^"]+)">([^<]*)<\/a><\/li>/)
+        check(links == expected,
+              "Haiku listing must exclude drafts/self and preserve escaped/fallback labels, nested routes and overrides: #{links.inspect}")
+        check(html.include?("rel=\"canonical\" href=\"https://pelgish.ink#{baseurl}/haiku\"") &&
+              main.include?("href=\"#{baseurl}/haiku/random\"") &&
+              !main.include?("No haikus") && !main.include?("Fixture body."),
+              "Haiku index must use the shared canonical, link to random, and list links not bodies")
+        (expected.map(&:first) + ["#{baseurl}/story/gatekeeper-of-bree"]).each do |url|
+            route = url.delete_prefix(baseurl)
+            backing = File.join(output, "#{route.delete_prefix("/")}.html")
+            check(File.read(backing).include?("rel=\"canonical\" href=\"https://pelgish.ink#{url}\""),
+                  "Generated canonical/backing must use the public slug: #{url}")
+        end
+        check(File.read(story_path).include?("href=\"#{baseurl}/story/gatekeeper-of-bree\""),
+              "Story links must use dashed filename URLs")
+        %w[haiku story].each do |route|
+            check(File.read(File.join(output, route, "index.html")) == File.read(File.join(output, "#{route}.html")),
+                  "Parent route index must match slashless backing: #{route}")
+        end
+        check(!File.exist?(File.join(output, "content")) &&
+              !File.exist?(File.join(output, "story/gatekeeper_of_bree.html")) &&
+              !File.exist?(File.join(output, "haiku/alpha_verse.html")),
+              "Source prefixes and default underscore filenames must not leak into output")
+        check_home(File.read(File.join(output, "index.html")))
+    end
+    haiku_fixtures.each_key { |name| File.unlink(File.join(source, "content", name)) }
+    build(source)
+    puts "PASS: haiku index, publication filtering, filename slugs, unchanged folders/overrides, links, canonicals and HTML backing"
+
     # Native underscore discovery and URL serialization also work with exactly one target.
     single = File.join(source, "content/haiku/only.md")
     File.write(single, "---\npublished: true\npermalink: '/elsewhere/one two&\"three\"<end'\n---\nOnly body.\n")
@@ -494,7 +561,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
 
     # Markdown hard breaks must become actual br elements, with separate stanzas.
     fixtures = {
-        "prose" => "---\ntitle: 'A & B'\nlayout: prose\n---\nParagraph one.\n\nParagraph two.\n",
+        "prose" => "---\ntitle: 'A & B'\nlayout: prose\n---\n# Authored heading\n\nParagraph one.\n\nParagraph two.\n",
         "poem" => "---\ntitle: 'Verse fixture'\nlayout: poetry\nreading_theme: ink\n---\nLine one\\\nLine two\n\nStanza two.\n",
         "draft" => "---\ntitle: 'Unpublished fixture'\nlayout: prose\n---\nDraft body.\n",
         "explicit-draft" => "---\ntitle: 'Explicit draft'\npublished: false\n---\nDraft body.\n",
@@ -529,6 +596,9 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(!File.exist?(output_path.call(output, name)), "Default-unpublished URL leaked: #{name}")
     end
     check_home(index)
+    # A published child forces real parent-directory precedence during HTTP checks.
+    served_story = File.join(source, "content/story/served.md")
+    File.write(served_story, "---\ntitle: Served story\npublished: true\n---\nServed story body.\n")
     FileUtils.rm_r(output)
     # Use a fixed second loopback address so the user's localhost previews stay untouched.
     # CI and automatic local setup target Linux, where 127.0.0.2 is also loopback.
@@ -545,7 +615,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         destinations << destination
         pid = Process.spawn(script, *options, "--host", fixture_host,
                             "--source", source, "--destination", destination,
-                            "--no-watch", out: log, err: [:child, :out])
+                            "--no-watch", "--disable-disk-cache", out: log, err: [:child, :out])
         pids << pid
         [pid, log]
     end
@@ -612,13 +682,21 @@ Dir.mktmpdir("pelgish-check-") do |source|
                   "Draft preview must serve random page without draft targets")
             check(request.call(port, "/haiku/random.html").body == random_response.body,
                   "Random slashless route must match its HTML backing")
-            story_response = request.call(port, "/story")
-            check(story_response.code == "200" && story_response["location"].nil? &&
-                  story_response["content-type"].include?("text/html") &&
-                  story_response.body.include?('rel="canonical" href="http://127.0.0.2:3999/story"') &&
-                  story_response.body.include?("No short stories have been published yet.") &&
-                  request.call(port, "/story.html").body == story_response.body,
-                  "Story slashless preview must directly serve its HTML backing and empty listing")
+            %w[haiku story].each do |route|
+                bare = request.call(port, "/#{route}")
+                check(bare.code == "301" && URI(bare["location"]).path == "/#{route}/",
+                      "Directory parent must have only its native slash redirect: #{route}")
+                parent = request.call(port, "/#{route}/")
+                check(parent.code == "200" && parent["location"].nil? &&
+                      parent["content-type"].include?("text/html") &&
+                      parent.body.include?("rel=\"canonical\" href=\"http://127.0.0.2:3999/#{route}\"") &&
+                      parent.body == request.call(port, "/#{route}.html").body &&
+                      parent.body == request.call(port, "/#{route}/index.html").body &&
+                      !parent.body.include?("Index of /"),
+                      "Parent directory must serve the canonical page, not a listing/404/loop: #{route}")
+            end
+            check(request.call(port, "/story/").body.include?('href="/story/served"'),
+                  "Parent story page must link to its published child")
             urls.each_value do |path|
                 response = request.call(port, path)
                 check(response.code == "200" && response["location"].nil? &&
@@ -631,6 +709,9 @@ Dir.mktmpdir("pelgish-check-") do |source|
                 check(backing.code == "200" && backing["content-type"].include?("text/html") &&
                       backing.body == response.body,
                       "Slashless URL does not match its HTML backing file: #{path}")
+                trailing = request.call(port, "#{path}/")
+                check(trailing.code == "200" && trailing["location"].nil? && trailing.body == response.body,
+                      "Incoming trailing slash must serve the canonical content for normalization: #{path}")
             end
             check(request.call(port, "/content/haiku/nested/haiku1.md").code == "404",
                   "Raw content Markdown leaked through preview")
@@ -648,6 +729,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     destinations.each { |destination| FileUtils.rm_rf(destination) }
     logs.each { |log| File.unlink(log) }
+    File.unlink(served_story)
     puts "PASS: owned LiveReload collision fails visibly; parallel HTTP/draft previews use derived and explicit LiveReload ports"
     published_names = fixtures.keys - %w[draft explicit-draft haiku/draft]
     published_names.each do |name|
@@ -704,11 +786,14 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     check(!File.exist?(File.join(output, "stable.html")), "Override retained the default route")
     check(prose.include?('<article class="writing prose">'), "Prose layout missing")
-    check(prose.include?("<h1>A &amp; B</h1>"), "Title must be escaped")
+    check(!prose.include?("<h1>A &amp; B</h1>"), "Frontmatter title became a prose heading")
+    check(prose.scan(/<h1\b/).length == 1 && prose.include?(">Authored heading</h1>"),
+          "Prose must retain only the Markdown-authored heading")
     check(prose.include?("<title>A &amp; B</title>"), "Document title must match escaped frontmatter without a suffix")
     check(prose.include?("<p>Paragraph one.</p>") && prose.include?("<p>Paragraph two.</p>"), "Prose paragraphs missing")
     check(poem.include?('<article class="writing poetry">'), "Poetry layout missing")
-    check(poem.include?("<h1>Verse fixture</h1>"), "Authored poetry title missing")
+    check(!poem.match?(/<h1\b/), "Frontmatter title became a poetry heading")
+    check(poem.include?("<title>Verse fixture</title>"), "Poetry document title missing")
     untitled = File.read(output_path.call(output, "haiku/20260620-001"))
     check(untitled.include?("<title>pelgish.ink</title>"), "Untitled document must fall back to the site title")
     check(untitled.include?("<p>Untitled fixture body.</p>"), "Untitled haiku content missing")
@@ -740,7 +825,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")
-    %w[haiku shortstory moon sun].each do |icon|
+    %w[haiku shortstory moon sun arrowcircle].each do |icon|
         asset = "assets/images/icon_#{icon}.png"
         check(File.binread(File.join(output, asset)) == File.binread(File.join(root, asset)),
               "Original #{icon} icon was altered or not built")

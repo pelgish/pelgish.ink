@@ -6,10 +6,26 @@ Jekyll::Hooks.register :pages, :post_init do |page|
     # Jekyll's publisher uses Hash#fetch, which bypasses lazy frontmatter defaults.
     page.data["published"] = page.data["published"]
     path = page.relative_path.delete_prefix("content/").delete_suffix(page.ext)
+    path = path.sub(%r{[^/]+\z}) { |filename| filename.tr("_", "-") }
     permalink = (page.data["permalink"] || "/#{path}").sub(%r{/+\z}, "").delete_suffix(".html")
     # Jekyll appends .html to the destination, not the public URL.
-    # GitHub Pages and Jekyll serve resolve that backing file without a redirect.
+    # Standalone routes resolve that backing file without a redirect.
     page.data["permalink"] = permalink.empty? ? "/" : permalink
+end
+
+# Parent routes also need an index when a host gives directories precedence.
+# Keep the slashless page URL and HTML backing; both copies share its canonical.
+Jekyll::Hooks.register :site, :post_write do |site|
+    site.pages.each do |page|
+        next unless page.output_ext == ".html" && !page.url.end_with?("/", ".html")
+
+        backing = page.destination(site.dest)
+        directory = backing.delete_suffix(".html")
+        next unless File.directory?(directory)
+
+        index = File.join(directory, "index.html")
+        FileUtils.cp(backing, index) unless File.exist?(index)
+    end
 end
 
 # Markdown without frontmatter would otherwise be copied publicly as a raw file.

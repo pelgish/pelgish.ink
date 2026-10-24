@@ -8,10 +8,14 @@ import assert from "node:assert/strict";
 const script = readFileSync(new URL("../assets/js/appearance.js", import.meta.url), "utf8");
 
 // Supply only the DOM/storage APIs the toggle needs; replacing markup must fail.
-function appearance({ dark = false, hint, saved, storageError } = {}) {
+function appearance({ dark = false, hint, saved, storageError,
+    href = "https://pelgish.ink/", canonical = "https://pelgish.ink/" } = {}) {
     const root = { dataset: hint ? { appearance: hint } : {} };
     const handlers = {};
     const writes = [];
+    const replacements = [];
+    const location = new URL(href);
+    const historyState = { reading: true };
     const icons = Object.freeze(["moon", "sun"]);
     const button = {
         hidden: true,
@@ -30,8 +34,13 @@ function appearance({ dark = false, hint, saved, storageError } = {}) {
     };
     runInNewContext(script, {
         DOMException,
+        URL,
         document: {
             documentElement: root,
+            querySelector(selector) {
+                assert.equal(selector, 'link[rel="canonical"]');
+                return canonical ? { href: canonical } : null;
+            },
             getElementById(id) {
                 assert.equal(id, "appearance-toggle");
                 return button;
@@ -39,6 +48,15 @@ function appearance({ dark = false, hint, saved, storageError } = {}) {
             addEventListener(name, callback) { handlers[name] = callback; },
         },
         window: {
+            location,
+            history: {
+                state: historyState,
+                replaceState(state, title, url) {
+                    assert.equal(state, historyState);
+                    assert.equal(title, "");
+                    replacements.push(url);
+                },
+            },
             matchMedia: () => system,
             localStorage: {
                 getItem() {
@@ -52,8 +70,39 @@ function appearance({ dark = false, hint, saved, storageError } = {}) {
             },
         },
     });
-    return { root, button, system, handlers, writes, icons };
+    return { root, button, system, handlers, writes, icons, replacements };
 }
+
+test("matching canonical removes only terminal slashes and preserves query, hash and baseurl", () => {
+    for (const path of ["/haiku", "/story", "/haiku/random", "/haiku/a-verse", "/preview/haiku"]) {
+        for (const suffix of ["/", "///"]) {
+            const state = appearance({
+                href: `https://pelgish.ink${path}${suffix}?q=a%20b#verse`,
+                canonical: `https://pelgish.ink${path}`,
+            });
+            state.handlers.DOMContentLoaded();
+            assert.deepEqual(state.replacements, [`${path}?q=a%20b#verse`]);
+            checkMode(state, "light");
+        }
+    }
+});
+
+test("normalization leaves root, clean paths, extensions and unrelated canonicals alone", () => {
+    for (const [path, canonical] of [
+        ["/", "https://pelgish.ink/"],
+        ["/preview/", "https://pelgish.ink/preview/"],
+        ["/haiku", "https://pelgish.ink/haiku"],
+        ["/haiku.html", "https://pelgish.ink/haiku"],
+        ["/haiku.html/", "https://pelgish.ink/haiku"],
+        ["/haiku/", "https://other.example/haiku"],
+        ["/haiku/", "https://pelgish.ink/elsewhere"],
+        ["/haiku/", null],
+    ]) {
+        const state = appearance({ href: `https://pelgish.ink${path}`, canonical });
+        state.handlers.DOMContentLoaded();
+        assert.deepEqual(state.replacements, []);
+    }
+});
 
 // Check both the root mode (which selects the CSS icon) and next-action labels.
 function checkMode(state, mode) {
@@ -125,19 +174,20 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
             assert.ok(glyph.includes(`\n    ${prefix}mask-${property}: ${value};`));
         }
     }
-    for (const icon of ["haiku", "shortstory", "moon", "sun"]) {
+    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle"]) {
         const selector = ["moon", "sun"].includes(icon) ? `appearance-${icon}` : `icon-${icon}`;
-        const rule = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]+)\\}`))[1];
+        const rule = css.match(new RegExp(`\\.${selector}(?:,\\s*\\.icon-sun)?\\s*\\{([^}]+)\\}`))[1];
         for (const prefix of ["-webkit-", ""]) {
             assert.ok(rule.includes(`\n    ${prefix}mask-image: url("../images/icon_${icon}.png");`));
         }
     }
+    assert.match(css, /\.appearance-sun,\s*\.icon-sun\s*\{[^}]*mask-image: url\("\.\.\/images\/icon_sun\.png"\)/);
     assert.match(css, /\.appearance-sun,\s*:root\[data-appearance="dark"\] \.appearance-moon\s*\{\s*display: none/);
     assert.match(css, /:root\[data-appearance="dark"\] \.appearance-sun\s*\{\s*display: inline-block/);
 });
 
 test("supplied mask PNGs decode with visible strokes and transparent surrounding pixels", () => {
-    for (const icon of ["haiku", "shortstory", "moon", "sun"]) {
+    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle"]) {
         const png = readFileSync(new URL(`../assets/images/icon_${icon}.png`, import.meta.url));
         assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
         const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
@@ -187,13 +237,36 @@ test("home copyright uses a growing viewport layout, not a fixed overlay", () =>
 test("home categories have large responsive icons; header aligns visual centers", () => {
     const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
     assert.match(css, /\.home-controls\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 14rem\), 1fr\)\)/);
-    assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*flex-direction: column;[^}]*font-size: 1.3rem/);
-    assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*gap: 1rem;[^}]*max-width: 100%/);
-    assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*padding: 0.5rem;[^}]*text-align: center/);
-    assert.match(css, /\.home-controls \.control-icon\s*\{\s*height: clamp\(64px, 20vw, 112px\);\s*width: clamp\(64px, 20vw, 112px\)/);
-    assert.match(css, /\.home-controls \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
-    assert.match(css, /\.home-controls \.icon-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
+    assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*flex-direction: column;[^}]*font-size: 1.3rem/);
+    assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*gap: 1rem;[^}]*max-width: 100%/);
+    assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*padding: 0.5rem;[^}]*text-align: center/);
+    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon\s*\{\s*height: clamp\(64px, 20vw, 112px\);\s*width: clamp\(64px, 20vw, 112px\)/);
+    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
+    assert.match(css, /\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon,\s*\.hero-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control \.control-icon,\s*\.hero-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
     assert.match(css, /\.site-header\s*\{\s*align-items: center;\s*display: flex/);
+    assert.match(css, /\.hero-control\s*\{\s*margin: 1.5rem auto;\s*width: fit-content;/);
+    assert.match(css, /\.hero-control:not\(\[hidden\]\)\s*\{\s*display: flex;/);
+    assert.doesNotMatch(css, /#appearance-toggle[^{]*\{[^}]*(?:clamp|transition|scale)/);
+});
+
+test("reusable spin runs only on hover or press with configurable speed/direction", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    assert.match(css, /\.icon-spin\s*\{\s*animation: icon-spin var\(--icon-spin-duration, 6s\) linear infinite;\s*animation-direction: var\(--icon-spin-direction, normal\);/);
+    assert.match(css, /\.hero-control \.icon-spin\s*\{\s*height: clamp\(56px, 16vw, 96px\);\s*width: clamp\(56px, 16vw, 96px\);/);
+    assert.match(css, /\.icon-spin\s*\{[^}]*animation-play-state: paused;/);
+    assert.match(css, /\.icon-spin:active,\s*\.icon-control:active \.icon-spin\s*\{\s*animation-play-state: running;/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*\.icon-spin:hover,\s*\.icon-control:hover \.icon-spin\s*\{\s*animation-play-state: running;/);
+    assert.match(css, /@keyframes icon-spin\s*\{\s*from \{ rotate: 0turn; \}\s*to \{ rotate: 1turn; \}\s*\}/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.icon-spin\s*\{\s*animation: none;\s*rotate: none;/);
+    for (const path of ["../haiku.md", "../content/haiku/_random.md"]) {
+        const markup = readFileSync(new URL(path, import.meta.url), "utf8");
+        assert.equal(markup.match(/class="control-icon icon-arrowcircle icon-spin"/g)?.length, 1);
+    }
+    for (const path of ["../index.md", "../_layouts/default.html"]) {
+        assert.doesNotMatch(readFileSync(new URL(path, import.meta.url), "utf8"), /icon-spin/);
+    }
+    const reader = readFileSync(new URL("../content/haiku/_random.md", import.meta.url), "utf8");
+    assert.match(reader, /id="haiku-content"[\s\S]*id="haiku-another" class="icon-control hero-control"[\s\S]*class="control-icon icon-arrowcircle icon-spin"[\s\S]*Get a new haiku/);
 });

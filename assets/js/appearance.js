@@ -39,6 +39,20 @@
 
     // Keep the control hidden until its click behavior is ready.
     document.addEventListener("DOMContentLoaded", () => {
+        // Directory hosts may add a slash; normalize only the current canonical path.
+        // Replacing history makes no request and keeps query/hash and baseurl intact.
+        const canonicalLink = document.querySelector('link[rel="canonical"]');
+        if (canonicalLink) {
+            const canonical = new URL(canonicalLink.href);
+            const location = window.location;
+            if (canonical.origin === location.origin && location.pathname !== "/" &&
+                location.pathname.endsWith("/") &&
+                location.pathname.replace(/\/+$/, "") === canonical.pathname) {
+                window.history.replaceState(window.history.state, "",
+                    canonical.pathname + location.search + location.hash);
+            }
+        }
+
         const button = document.getElementById("appearance-toggle");
         if (!button) return;
         button.addEventListener("click", () => {

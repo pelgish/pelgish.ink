@@ -157,9 +157,39 @@ button, input, select, textarea {
     mask-image: url("../images/icon_moon.png");
 }
 
-.appearance-sun {
+.appearance-sun,
+.icon-sun {
     -webkit-mask-image: url("../images/icon_sun.png");
     mask-image: url("../images/icon_sun.png");
+}
+
+.icon-arrowcircle {
+    -webkit-mask-image: url("../images/icon_arrowcircle.png");
+    mask-image: url("../images/icon_arrowcircle.png");
+}
+
+/* Independent rotation leaves each icon's hover/press scale available. */
+.icon-spin {
+    animation: icon-spin var(--icon-spin-duration, 6s) linear infinite;
+    animation-direction: var(--icon-spin-direction, normal);
+    animation-play-state: paused;
+}
+
+.icon-spin:active,
+.icon-control:active .icon-spin {
+    animation-play-state: running;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .icon-spin:hover,
+    .icon-control:hover .icon-spin {
+        animation-play-state: running;
+    }
+}
+
+@keyframes icon-spin {
+    from { rotate: 0turn; }
+    to { rotate: 1turn; }
 }
 
 .home-controls {
@@ -170,7 +200,8 @@ button, input, select, textarea {
     margin-bottom: 1.5rem;
 }
 
-.home-controls .icon-control {
+.home-controls .icon-control,
+.hero-control {
     flex-direction: column;
     font-size: 1.3rem;
     gap: 1rem;
@@ -179,20 +210,38 @@ button, input, select, textarea {
     text-align: center;
 }
 
-.home-controls .control-icon {
+/* A single large control stays centered in normal reading flow. */
+.hero-control {
+    margin: 1.5rem auto;
+    width: fit-content;
+}
+
+.hero-control:not([hidden]) {
+    display: flex;
+}
+
+.home-controls .control-icon,
+.hero-control .control-icon {
     height: clamp(64px, 20vw, 112px);
     width: clamp(64px, 20vw, 112px);
     transition: transform 1000ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.hero-control .icon-spin {
+    height: clamp(56px, 16vw, 96px);
+    width: clamp(56px, 16vw, 96px);
+}
+
 /* Native press feedback moves only artwork, not labels or touch targets. */
-.home-controls .icon-control:active .control-icon {
+.home-controls .icon-control:active .control-icon,
+.hero-control:active .control-icon {
     transform: scale(1.15);
 }
 
 /* Hover growth is limited to fine pointers to avoid sticky tap hover. */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-    .home-controls .icon-control:hover .control-icon {
+    .home-controls .icon-control:hover .control-icon,
+    .hero-control:hover .control-icon {
         transform: scale(1.15);
     }
 }
@@ -319,8 +368,15 @@ pre {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .icon-spin {
+        animation: none;
+        rotate: none;
+    }
+
     .home-controls .control-icon,
-    .home-controls .icon-control:active .control-icon {
+    .home-controls .icon-control:active .control-icon,
+    .hero-control .control-icon,
+    .hero-control:active .control-icon {
         transform: none;
         transition: none;
     }

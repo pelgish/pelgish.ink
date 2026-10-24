@@ -1,9 +1,11 @@
 ---
-title: The Gatekeeper of Bree
-layout: prose
+title: 'The Gatekeeper of Bree'
+layout: 'prose'
 published: true
-published_timestamp: "2026-10-23T21:45:17Z"
+published_timestamp: "2026-10-24T17:47:32Z"
 ---
+
+# The Gatekeeper of Bree
 
 The night was clear, and white stars were shining, when the four hobbits approached the gate.
 Hobbits traveling out from the Shire had become a rare event in recent days.
@@ -194,4 +196,3 @@ He held his spear strong, but it was to no avail.
 The last thing he saw was a flash of steel.
 
 The candle ran out in the gatehouse, and the riders tore up the hill towards the inn.
-

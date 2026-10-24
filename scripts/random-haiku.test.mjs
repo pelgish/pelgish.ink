@@ -12,6 +12,14 @@ async function readHaiku(targets, random = 0, options = {}) {
     const fetched = [];
     const status = { textContent: "", hidden: true };
     const host = { children: [], replaceChildren(...children) { this.children = children; } };
+    const button = {
+        hidden: true,
+        disabled: false,
+        addEventListener(event, handler) {
+            assert.equal(event, "click");
+            this.click = handler;
+        },
+    };
     const article = {
         title: "Authored title",
         body: "<p>First line<br>Second line</p>",
@@ -33,6 +41,7 @@ async function readHaiku(targets, random = 0, options = {}) {
                     "haiku-targets": { textContent: JSON.stringify(targets) },
                     "haiku-content": host,
                     "haiku-status": status,
+                    "haiku-another": button,
                 }[id];
             },
             importNode(node, deep) {
@@ -48,6 +57,8 @@ async function readHaiku(targets, random = 0, options = {}) {
             fetched.push(url);
             assert.equal(init.mode, "same-origin");
             assert.equal(init.redirect, "error");
+            assert.equal(button.disabled, true);
+            if (options.beforeResponse) await options.beforeResponse();
             if (options.networkFailure) throw new Error("Offline");
             return {
                 ok: !options.httpError,
@@ -69,15 +80,20 @@ async function readHaiku(targets, random = 0, options = {}) {
         },
     });
     assert.equal(window.location.href, readerURL);
-    return { fetched, status, host };
+    return { fetched, status, host, button, window };
 }
 
 test("empty list reports no published haiku and does not fetch", async () => {
-    const { fetched, status, host } = await readHaiku([]);
+    const { fetched, status, host, button } = await readHaiku([]);
     assert.deepEqual(fetched, []);
     assert.equal(status.hidden, false);
     assert.match(status.textContent, /No published haiku/);
     assert.deepEqual(host.children, []);
+    assert.equal(button.hidden, false);
+    assert.equal(button.disabled, false);
+    await button.click();
+    assert.match(status.textContent, /No published haiku/);
+    assert.deepEqual(fetched, []);
 });
 
 test("one target imports the authored article and clears loading without navigation", async () => {
@@ -111,9 +127,58 @@ test("HTTP errors, network failure and unexpected HTML visibly fail", async () =
         { missingArticle: true }, { missingBody: true }]) {
         const { status, host } = await readHaiku(["/haiku/only"], 0, options);
         assert.equal(status.hidden, false);
-        assert.match(status.textContent, /Unable to load a haiku.*reload/);
+        assert.match(status.textContent, /Unable to load a haiku.*Get a new haiku button/);
         assert.deepEqual(host.children, []);
     }
+});
+
+test("new haiku button fetches again in place and ignores overlapping requests", async () => {
+    const options = {};
+    const { fetched, status, host, button, window } = await readHaiku(["/haiku/only"], 0, options);
+    const previous = host.children[0];
+    let release;
+    options.beforeResponse = () => new Promise(resolve => { release = resolve; });
+    const pending = button.click();
+    assert.equal(button.disabled, true);
+    assert.equal(button.hidden, false);
+    assert.match(status.textContent, /Loading/);
+    await button.click();
+    assert.equal(fetched.length, 2, "Initial fetch and one click, not the overlapping click");
+    assert.equal(host.children[0], previous, "Keep current writing until the next is ready");
+    release();
+    await pending;
+    assert.equal(button.disabled, false);
+    assert.equal(status.hidden, true);
+    assert.notEqual(host.children[0], previous);
+    assert.equal(window.location.href, readerURL);
+});
+
+test("failed click preserves the latest haiku and the button retries successfully", async () => {
+    const options = {};
+    const { fetched, status, host, button } = await readHaiku(["/haiku/only"], 0, options);
+    const previous = host.children[0];
+    options.networkFailure = true;
+    await button.click();
+    assert.equal(host.children[0], previous);
+    assert.equal(status.hidden, false);
+    assert.match(status.textContent, /Unable to load/);
+    assert.equal(button.disabled, false);
+    options.networkFailure = false;
+    await button.click();
+    assert.equal(fetched.length, 3);
+    assert.equal(status.hidden, true);
+    assert.equal(button.disabled, false);
+    assert.notEqual(host.children[0], previous);
+});
+
+test("initial network failure can be retried with the new haiku button", async () => {
+    const options = { networkFailure: true };
+    const { status, host, button } = await readHaiku(["/haiku/only"], 0, options);
+    assert.equal(button.disabled, false);
+    options.networkFailure = false;
+    await button.click();
+    assert.equal(host.children.length, 1);
+    assert.equal(status.hidden, true);
 });
 
 test("self and external targets fail without fetching or navigating", async () => {

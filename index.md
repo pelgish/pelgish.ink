@@ -5,7 +5,7 @@ permalink: /
 ---
 
 <section class="home-controls" aria-label="Explore writing">
-    <a class="icon-control" href="{{ '/haiku/random' | relative_url }}" aria-label="Haikus (read a random haiku)" title="Read a random haiku">
+    <a class="icon-control" href="{{ '/haiku' | relative_url }}" aria-label="Haikus" title="Read haikus">
         <span class="control-icon icon-haiku" aria-hidden="true"></span>
         <span>Haikus</span>
     </a>
@@ -19,4 +19,5 @@ permalink: /
 {% assign copyright_end_year = site.time | date: "%Y" %}
 <section class="home-copyright" aria-label="Copyright">
     <p>All content on this site is copyright(c) Connor Shugg {{ copyright_start_year }}{% if copyright_start_year != copyright_end_year %}-{{ copyright_end_year }}{% endif %}</p>
+    <p>Writing and images are of my own original creation.</p>
 </section>
