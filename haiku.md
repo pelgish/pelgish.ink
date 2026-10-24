@@ -22,13 +22,13 @@ permalink: /haiku
     {%- endfor -%}
 {%- endcapture %}
 
-# Haikus
-
 {::nomarkdown}
-<a class="icon-control hero-control" href="{{ '/haiku/random' | relative_url }}">
-    <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
-    <span>Read a random haiku</span>
-</a>
+<div class="haiku-heading">
+    <h1>Haikus</h1>
+    <a class="icon-control" href="{{ '/haiku/random' | relative_url }}" aria-label="Read a random haiku" title="Read a random haiku">
+        <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
+    </a>
+</div>
 {:/nomarkdown}
 
 {% if haikus != "" %}

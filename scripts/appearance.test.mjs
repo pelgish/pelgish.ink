@@ -241,14 +241,25 @@ test("home categories have large responsive icons; header aligns visual centers"
     assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*gap: 1rem;[^}]*max-width: 100%/);
     assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*padding: 0.5rem;[^}]*text-align: center/);
     assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon\s*\{\s*height: clamp\(64px, 20vw, 112px\);\s*width: clamp\(64px, 20vw, 112px\)/);
-    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
-    assert.match(css, /\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon,\s*\.hero-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control \.control-icon,\s*\.hero-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
+    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon,\s*\.haiku-heading \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
+    assert.match(css, /\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon,\s*\.hero-control:hover \.control-icon,\s*\.haiku-heading \.icon-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
     assert.match(css, /\.site-header\s*\{\s*align-items: center;\s*display: flex/);
     assert.match(css, /\.hero-control\s*\{\s*margin: 1.5rem auto;\s*width: fit-content;/);
     assert.match(css, /\.hero-control:not\(\[hidden\]\)\s*\{\s*display: flex;/);
     assert.doesNotMatch(css, /#appearance-toggle[^{]*\{[^}]*(?:clamp|transition|scale)/);
+});
+
+test("haiku listing uses a compact heading row with an accessible action", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const markup = readFileSync(new URL("../haiku.md", import.meta.url), "utf8");
+    assert.match(css, /\.haiku-heading\s*\{\s*align-items: center;\s*display: flex;\s*gap: 1rem;\s*justify-content: space-between;/);
+    assert.match(css, /\.haiku-heading h1\s*\{\s*margin: 0;\s*min-width: 0;/);
+    assert.match(css, /\.control-icon\s*\{[^}]*height: 2rem;\s*width: 2rem;/);
+    assert.match(css, /\.icon-control:active\s*\{[^}]*min-height: 44px;\s*min-width: 44px;/);
+    assert.match(markup, /<div class="haiku-heading">\s*<h1>Haikus<\/h1>\s*<a class="icon-control"[^>]*aria-label="Read a random haiku" title="Read a random haiku">/);
+    assert.doesNotMatch(markup, /hero-control|<span>Read a random haiku<\/span>/);
 });
 
 test("reusable spin runs only on hover or press with configurable speed/direction", () => {

@@ -513,9 +513,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
         build(source, "unpublished" => unpublished, "baseurl" => baseurl)
         html = File.read(haiku_path)
         main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
-        check(main.match?(/\A\s*(?:<!--.*?-->\s*)?<h1\b[^>]*>Haikus<\/h1>\s*<a class="icon-control hero-control" href="#{Regexp.escape(baseurl)}\/haiku\/random">\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Read a random haiku<\/span>\s*<\/a>\s*<ul>/m) &&
-              main.scan(/Read a random haiku/).length == 1,
-              "Haiku listing must keep its heading and one labeled arrow-circle control above the list")
+        check(main.match?(/\A\s*(?:<!--.*?-->\s*)?<div class="haiku-heading">\s*<h1\b[^>]*>Haikus<\/h1>\s*<a class="icon-control" href="#{Regexp.escape(baseurl)}\/haiku\/random" aria-label="Read a random haiku" title="Read a random haiku">\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<\/a>\s*<\/div>\s*<ul>/m) &&
+              main.scan(/aria-label="Read a random haiku"/).length == 1 &&
+              !main.include?("hero-control"),
+              "Haiku listing must share one row between its heading and compact accessible arrow-circle control")
         expected = [
             ["/haiku/alpha-verse", "A &lt;verse&gt; &amp; &quot;haiku&quot;"],
             ["/haiku/nested_folder/blank-title", "blank_title"],
