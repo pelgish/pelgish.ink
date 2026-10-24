@@ -28,7 +28,7 @@ Harry was the gatekeeper, after all, and what good was a gatekeeper if he didn't
 Four hobbits!" Harry exclaimed, more so to himself than to anyone listening.
 "And what's more, out of the Shire by their talk."
 He paused for a moment, eyeing each of them.
-The second hobbit, closest to the first, was short and chubby, and despite his unthreatening appearance, Harry felt his hard, protecting gaze.
+The second hobbit, closest to the first, was short and chubby, and despite his unthreatening appearance, Harry felt a hard, guarded gaze from him.
 The other two stood behind the first pair, one with a watchful expression and the other aloof, kicking a pebble in the dirt.
 
 Despite his initial surprise, Harry wasn't worried about four hobbits, no matter what time of day they came.
@@ -61,16 +61,18 @@ If you go on to *The Pony*, you'll find you're not the only guests."
 With that the hobbits bade him good night and road up the hill further into town.
 Harry watched them go, until at last they turned the corner and went out of sight.
 Then, he turned and sat back down inside the gatehouse.
-The hobbits seemed as harmless as the next, but the old gatekeeper wasn't a fool; he could tell they traveled with a secret on their shoulders.
+The hobbits seemed as harmless as the next, but the old gatekeeper wasn't a fool; he could tell they traveled with a secret.
 
-He had meant what he told them: queer folk were traveling on the road these days.
+He had meant what he told them: strange folk were traveling on the road these days.
 It was a warning to the hobbits, and a reminder to himself to keep a careful watch.
 In all his long days watching the West-gate of Bree, nothing more than drunks or the occasional ruffian had given him trouble.
 Now, though, there was an unseen malice in the night.
-There was an sinister chill in the air, and when the wind blew through the gatehouse, Harry shivered.
+There was a sinister chill in the air, and when the wind blew through the gatehouse, Harry shivered.
 
 The next day passed quickly, and Harry saw to the regular comings and goings of folk, most of them turning north or south along the Greenway.
 At one point in the afternoon, Bill Ferny rode in through the west gate, ignoring Harry entirely.
+There was a large sack strung to his saddle that clinked with each step of his horse.
+Coins.
 
 "Now hold on a minute, Ferny!" Harry called out, standing in the doorway of the gatehouse.
 "You came in through this gate yesterday, but I didn't see you leave at any point this morning."
@@ -78,9 +80,9 @@ At one point in the afternoon, Bill Ferny rode in through the west gate, ignorin
 Ferny stayed his horse and turned.
 "I went out the south gate this morning, old man."
 
-"Why not just come back through the southern gate, then?"
-A question like that was certainly not his business, but Harry smelled a hint of mischief.
-He had never liked that man, Bill Ferny.
+"And what business are you about that brings such a handsome payment as that?"
+Harry indicated to the sack of coins.
+He had never liked that Bill Ferny, being so willing to do nefarious nogoods in exchange for payment.
 
 "My business is for me alone, and none of it is reserved for your ears, gatekeeper.
 I come and go when I please, and where I please."
@@ -99,8 +101,8 @@ He smirked.
 "I was very pleased to see them.
 They gave quite a show at the inn last night."
 
-Harry furrowed his brows in confusion.
-"Why do you care about four hobbits?"
+Harry furrowed his brows.
+"What do you care about four hobbits?"
 
 Bill Ferny had already turned away and had begun riding up the hill.
 At the question, he turned his head and called back in response.
@@ -143,7 +145,8 @@ It was too dark to see, but the galloping was nearly upon him.
 
 He glanced to the far wall, where a long spear, old and in disrepair, was leaning in the corner.
 Harry had received it from the Bree guard, more so as a formality than as a precaution.
-The old gatekeeper had never used it.
+He had never used it.
+Not once.
 But that night, he picked it up.
 
 The galloping slowed down and came to a stop.
@@ -155,13 +158,13 @@ One of the riders noticed him, and turned its cloaked head towards him.
 Under the hood, Harry could see nothing but shadow.
 
 "Open the gate," hissed the rider.
-The words shot chills through Harry, and he felt terror.
+Chills shot through Harry like a biting winter wind, and he felt fear.
 
 "Open the gate and let us in." the second rider barked.
 A gust of wind threw their tattered black cloaks about them.
 
 For a moment, the gatekeeper was frozen with terror.
-But then, he looked down at his hands, and saw the spear they gripped.
+But then, he looked down at his hands, and saw the spear that he gripped with white knuckles.
 Mastering his fear, he stood and spoke.
 
 "I will not!" Harry said defiantly, though his voice shook.
@@ -174,7 +177,7 @@ Both riders were staring through him.
 
 Despite it all, Harry found his courage.
 He met their gaze one last time, calling out as bravely as he could.
-"I will not open this gate for you lot!
+"I will not open this gate for you, not now, not ever!
 Turn away and do not return!"
 
 Then, he ran out of the gatehouse into the inner courtyard, then stood and faced the inside of the gate.
