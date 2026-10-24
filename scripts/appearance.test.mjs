@@ -74,7 +74,7 @@ function appearance({ dark = false, hint, saved, storageError,
 }
 
 test("matching canonical removes only terminal slashes and preserves query, hash and baseurl", () => {
-    for (const path of ["/haiku", "/story", "/haiku/random", "/haiku/a-verse", "/preview/haiku"]) {
+    for (const path of ["/haiku", "/story", "/haiku/random", "/story/random", "/haiku/a-verse", "/preview/haiku"]) {
         for (const suffix of ["/", "///"]) {
             const state = appearance({
                 href: `https://pelgish.ink${path}${suffix}?q=a%20b#verse`,
@@ -241,25 +241,27 @@ test("home categories have large responsive icons; header aligns visual centers"
     assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*gap: 1rem;[^}]*max-width: 100%/);
     assert.match(css, /\.home-controls \.icon-control,\s*\.hero-control\s*\{[^}]*padding: 0.5rem;[^}]*text-align: center/);
     assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon\s*\{\s*height: clamp\(64px, 20vw, 112px\);\s*width: clamp\(64px, 20vw, 112px\)/);
-    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon,\s*\.haiku-heading \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
-    assert.match(css, /\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon,\s*\.hero-control:hover \.control-icon,\s*\.haiku-heading \.icon-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
-    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
+    assert.match(css, /\.home-controls \.control-icon,\s*\.hero-control \.control-icon,\s*\.haiku-heading \.control-icon,\s*\.story-heading \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
+    assert.match(css, /\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon,\s*\.story-heading \.icon-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon,\s*\.hero-control:hover \.control-icon,\s*\.haiku-heading \.icon-control:hover \.control-icon,\s*\.story-heading \.icon-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon,\s*\.hero-control \.control-icon,\s*\.hero-control:active \.control-icon,\s*\.haiku-heading \.control-icon,\s*\.haiku-heading \.icon-control:active \.control-icon,\s*\.story-heading \.control-icon,\s*\.story-heading \.icon-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
     assert.match(css, /\.site-header\s*\{\s*align-items: center;\s*display: flex/);
     assert.match(css, /\.hero-control\s*\{\s*margin: 1.5rem auto;\s*width: fit-content;/);
     assert.match(css, /\.hero-control:not\(\[hidden\]\)\s*\{\s*display: flex;/);
     assert.doesNotMatch(css, /#appearance-toggle[^{]*\{[^}]*(?:clamp|transition|scale)/);
 });
 
-test("haiku listing uses a compact heading row with an accessible action", () => {
+test("haiku and story listings share compact heading geometry and accessible actions", () => {
     const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
-    const markup = readFileSync(new URL("../haiku.md", import.meta.url), "utf8");
-    assert.match(css, /\.haiku-heading\s*\{\s*align-items: center;\s*display: flex;\s*gap: 1rem;\s*justify-content: space-between;/);
-    assert.match(css, /\.haiku-heading h1\s*\{\s*margin: 0;\s*min-width: 0;/);
+    assert.match(css, /\.haiku-heading,\s*\.story-heading\s*\{\s*align-items: center;\s*display: flex;\s*gap: 1rem;\s*justify-content: space-between;/);
+    assert.match(css, /\.haiku-heading h1,\s*\.story-heading h1\s*\{\s*margin: 0;\s*min-width: 0;/);
     assert.match(css, /\.control-icon\s*\{[^}]*height: 2rem;\s*width: 2rem;/);
     assert.match(css, /\.icon-control:active\s*\{[^}]*min-height: 44px;\s*min-width: 44px;/);
-    assert.match(markup, /<div class="haiku-heading">\s*<h1>Haikus<\/h1>\s*<a class="icon-control"[^>]*aria-label="Read a random haiku" title="Read a random haiku">/);
-    assert.doesNotMatch(markup, /hero-control|<span>Read a random haiku<\/span>/);
+    for (const [kind, title] of [["haiku", "Haikus"], ["story", "Short Stories"]]) {
+        const markup = readFileSync(new URL(`../${kind}.md`, import.meta.url), "utf8");
+        assert.match(markup, new RegExp(`<div class="${kind}-heading">\\s*<h1>${title}</h1>\\s*<a class="icon-control"[^>]*aria-label="Read a random ${kind}" title="Read a random ${kind}">`));
+        assert.doesNotMatch(markup, /hero-control|<span>Read a random/);
+    }
 });
 
 test("reusable spin runs only on hover or press with configurable speed/direction", () => {
@@ -271,13 +273,15 @@ test("reusable spin runs only on hover or press with configurable speed/directio
     assert.match(css, /@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*\.icon-spin:hover,\s*\.icon-control:hover \.icon-spin\s*\{\s*animation-play-state: running;/);
     assert.match(css, /@keyframes icon-spin\s*\{\s*from \{ rotate: 0turn; \}\s*to \{ rotate: 1turn; \}\s*\}/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.icon-spin\s*\{\s*animation: none;\s*rotate: none;/);
-    for (const path of ["../haiku.md", "../content/haiku/_random.md"]) {
+    for (const path of ["../haiku.md", "../content/haiku/_random.md", "../story.md", "../content/story/_random.md"]) {
         const markup = readFileSync(new URL(path, import.meta.url), "utf8");
         assert.equal(markup.match(/class="control-icon icon-arrowcircle icon-spin"/g)?.length, 1);
     }
     for (const path of ["../index.md", "../_layouts/default.html"]) {
         assert.doesNotMatch(readFileSync(new URL(path, import.meta.url), "utf8"), /icon-spin/);
     }
-    const reader = readFileSync(new URL("../content/haiku/_random.md", import.meta.url), "utf8");
-    assert.match(reader, /id="haiku-content"[\s\S]*id="haiku-another" class="icon-control hero-control"[\s\S]*class="control-icon icon-arrowcircle icon-spin"[\s\S]*Get a new haiku/);
+    for (const kind of ["haiku", "story"]) {
+        const reader = readFileSync(new URL(`../content/${kind}/_random.md`, import.meta.url), "utf8");
+        assert.match(reader, new RegExp(`id="${kind}-content"[\\s\\S]*id="${kind}-another" class="icon-control hero-control"[\\s\\S]*class="control-icon icon-arrowcircle icon-spin"[\\s\\S]*Get a new ${kind}`));
+    }
 });

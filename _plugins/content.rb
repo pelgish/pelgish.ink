@@ -30,9 +30,12 @@ end
 
 # Markdown without frontmatter would otherwise be copied publicly as a raw file.
 Jekyll::Hooks.register :site, :post_read do |site|
-    # Reserve the random page's public route and its native HTML backing file.
-    random = site.pages.find { |page| page.relative_path == "content/haiku/_random.md" }
-    if random
+    # Reserve each random reader's public route and native HTML backing file.
+    %w[haiku story].each do |kind|
+        source = "content/#{kind}/_random.md"
+        random = site.pages.find { |page| page.relative_path == source }
+        next unless random
+
         backing = random.destination(site.dest)
         route = backing.delete_suffix(".html")
         collisions = [backing, route, File.join(route, "index.html")]
@@ -40,7 +43,7 @@ Jekyll::Hooks.register :site, :post_read do |site|
             next if file.equal?(random) || !collisions.include?(file.destination(site.dest))
 
             raise Jekyll::Errors::FatalException,
-                  "#{file.relative_path}: /haiku/random is reserved for content/haiku/_random.md."
+                  "#{file.relative_path}: /#{kind}/random is reserved for #{source}."
         end
     end
 

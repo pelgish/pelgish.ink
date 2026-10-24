@@ -2,8 +2,9 @@
 title: 'The Gatekeeper of Bree'
 layout: 'prose'
 published: true
-published_timestamp: "2026-10-24T17:47:32Z"
+published_timestamp: "2026-10-24T18:27:01Z"
 ---
+
 
 # The Gatekeeper of Bree
 

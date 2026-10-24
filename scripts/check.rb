@@ -40,7 +40,7 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
 end
 
 # The reader shares the site shell and exposes its host, status, and target list.
-def random_targets(html)
+def random_targets(html, kind = "haiku")
     check(html.match?(/\A<!doctype html>(?:\s|<!--.*?-->)*<html\b/im) && html.rstrip.end_with?("</html>"),
           "Random page must be a complete HTML document")
     check(html.scan(/<header class="site-header">/).length == 1 &&
@@ -48,30 +48,31 @@ def random_targets(html)
           html.include?('id="appearance-toggle" class="icon-control" type="button" hidden'),
           "Random reader must use one shared shell with the appearance control")
     main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
-    check(main&.match?(/<div id="haiku-content">\s*<\/div>/) &&
-          main.match?(/<p id="haiku-status" role="status" hidden(?:="")?>\s*<\/p>/),
+    data_kind = kind == "story" ? ' data-kind="story"' : ""
+    check(main&.match?(/<div id="#{kind}-content"#{data_kind}>\s*<\/div>/) &&
+          main.match?(/<p id="#{kind}-status" role="status" hidden(?:="")?>\s*<\/p>/),
           "Random reader must start with an empty content host and hidden accessible status")
-    check(main.match?(/<noscript>\s*<p>Enable JavaScript to read a random haiku on this page\.<\/p>\s*<\/noscript>/),
+    check(main.match?(/<noscript>\s*<p>Enable JavaScript to read a random #{kind} on this page\.<\/p>\s*<\/noscript>/),
           "Random reader must explain the JavaScript requirement without JS")
-    check(main.match?(/<div id="haiku-content">\s*<\/div>\s*<button id="haiku-another" class="icon-control hero-control" type="button" aria-label="Get a new haiku" title="Get a new haiku" hidden(?:="")?>\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Get a new haiku<\/span>\s*<\/button>/) &&
-          main.scan(/id="haiku-another"/).length == 1,
+    check(main.match?(/<div id="#{kind}-content"#{data_kind}>\s*<\/div>\s*<button id="#{kind}-another" class="icon-control hero-control" type="button" aria-label="Get a new #{kind}" title="Get a new #{kind}" hidden(?:="")?>\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Get a new #{kind}<\/span>\s*<\/button>/) &&
+          main.scan(/id="#{kind}-another"/).length == 1,
           "Accessible arrow-circle button must start hidden and follow the haiku host")
     check(!html.include?('class="home-page"') && !html.include?('class="home-copyright"') &&
           !html.include?("All content on this site is copyright(c)"),
           "Home layout or copyright leaked into the random reader")
     canonical = html[/rel="canonical" href="([^"]+)"/, 1]
-    check(canonical && URI(canonical).path.delete_prefix("/preview") == "/haiku/random",
+    check(canonical && URI(canonical).path.delete_prefix("/preview") == "/#{kind}/random",
           "Random canonical must be slashless")
-    prefix = URI(canonical).path.delete_suffix("/haiku/random")
+    prefix = URI(canonical).path.delete_suffix("/#{kind}/random")
     check(html.include?('<meta charset="utf-8">') &&
           html.scan(/<script\b[^>]*src="([^"]+)"/).flatten ==
               ["#{prefix}/assets/js/appearance.js", "#{prefix}/assets/js/random-haiku.js"] &&
           html.include?("src=\"#{prefix}/assets/js/random-haiku.js\" defer>") &&
           html.include?("href=\"#{prefix}/assets/css/style.css\""),
           "Random reader must load the shared appearance/styles and deferred reader with the URL prefix")
-    check(main.scan(/<script id="haiku-targets" type="application\/json">/).length == 1,
+    check(main.scan(/<script id="#{kind}-targets" type="application\/json">/).length == 1,
           "Random reader must have exactly one generated target list")
-    JSON.parse(main[/<script id="haiku-targets" type="application\/json">(.*?)<\/script>/m, 1])
+    JSON.parse(main[/<script id="#{kind}-targets" type="application\/json">(.*?)<\/script>/m, 1])
 end
 
 # Use the same configuration as the real site, with temporary source/output paths.
@@ -119,30 +120,72 @@ Dir.mktmpdir("pelgish-publish-check-") do |directory|
     timestamp = data["published_timestamp"]
     check(timestamp.is_a?(String) && timestamp.match?(/\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\z/), "Timestamp must be ISO8601 UTC")
     check(Time.iso8601(timestamp).to_i.between?(before.to_i, after.to_i), "Timestamp must be current UTC")
+    check(!data.key?("updated_timestamp"), "First publish must not have an update timestamp")
     check(File.binread(path).end_with?(body), "Poetry body bytes changed")
     check(File.stat(path).mode & 0o777 == 0o640, "Permission bits changed")
-    check(data.reject { |key, _| %w[published published_timestamp].include?(key) } ==
+    check(data.reject { |key, _| %w[published published_timestamp updated_timestamp].include?(key) } ==
           YAML.safe_load(header.split("---")[1], permitted_classes: [Date]), "Other metadata changed")
 
-    # An old persistent timestamp makes refresh testing deterministic without sleeping.
+    # Old fixture timestamps prove repeated refreshes without sleeping.
     File.binwrite(path, File.binread(path).sub(timestamp, "2000-01-01T00:00:00Z"))
-    publication(publisher, [path], root)
-    check(frontmatter(path)["published_timestamp"] != "2000-01-01T00:00:00Z", "Republish preserved an old timestamp")
+    2.times do
+        before = Time.now.utc
+        publication(publisher, [path], root)
+        after = Time.now.utc
+        data = frontmatter(path)
+        check(data["published"] == true && data["published_timestamp"] == "2000-01-01T00:00:00Z",
+              "Republish must preserve the original timestamp and publish flag")
+        updated = data["updated_timestamp"]
+        check(updated.is_a?(String) && updated.match?(/\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\z/) &&
+              Time.iso8601(updated).to_i.between?(before.to_i, after.to_i), "Update timestamp must be current UTC")
+        check(File.binread(path).end_with?(body), "Republish changed body bytes")
+        check(File.stat(path).mode & 0o777 == 0o640, "Republish changed permission bits")
+        File.binwrite(path, File.binread(path).sub("updated_timestamp: \"#{updated}\"",
+                                                 'updated_timestamp: "2001-01-01T00:00:00Z"'))
+    end
     publication(publisher, [path, "--unpublish"], root)
     check(File.binread(path) == original, "Unpublish must restore unrelated formatting/comments/body")
     publication(publisher, ["--unpublish", path], directory)
     check(File.binread(path) == original, "Repeated unpublish changed the file")
 
+    # The original field's existence, not its value or the publication flag, selects republish.
+    ["'2000-01-01T01:02:03+02:00'", "2000-01-01T01:02:03+02:00",
+     "2000-01-01", "null", "'not a date'", "|\n  old timestamp"].product(["", "published: false\n"]).each do |value, flag|
+        original_field = "\"published_timestamp\": #{value} # retained comment\n"
+        File.binwrite(path, "---\n#{flag}#{original_field}---\n#{body}")
+        expected = frontmatter(path)["published_timestamp"]
+        publication(publisher, [path], directory)
+        data = frontmatter(path)
+        check(data["published"] == true && data["published_timestamp"] == expected &&
+              data.key?("updated_timestamp"), "Existing original must select republish regardless of flag/value")
+        check(File.binread(path).include?(original_field) && File.binread(path).end_with?(body),
+              "Republish must retain original timestamp representation/comments and body")
+    end
+
+    # An orphan update is cleared so first-publication metadata starts clean.
+    File.binwrite(path, "---\nupdated_timestamp: '2001-01-01T00:00:00Z'\n---\n#{body}")
+    publication(publisher, [path], directory)
+    data = frontmatter(path)
+    check(data["published"] == true && data.key?("published_timestamp") && !data.key?("updated_timestamp"),
+          "First publish must clear an orphan update timestamp")
+
     # Flow-style mappings, quoted publication keys, and multiline values use real YAML parsing.
     ["{title: Flow, date: 2020-01-02, other: [1, true]}\n",
+     "{title: Flow, published: false, published_timestamp: '2000-01-01T01:02:03+02:00', updated_timestamp: old}\n",
      "  title: Indented\n  other: true\n",
+     "  title: Indented\n  published_timestamp: 2000-01-01\n",
      "title: Aliases\nbase: &base {count: 3}\ncopy: *base\n",
      "title: Unicode café\nother: naïve\n",
      "title: Block\n\"published\": false # old flag\npublished_timestamp: |\n  old timestamp\n"].each do |yaml|
         File.write(path, "---\n#{yaml}---\n#{body}")
-        expected = frontmatter(path).reject { |key, _| %w[published published_timestamp].include?(key) }
+        prior = frontmatter(path)
+        expected = prior.reject { |key, _| %w[published published_timestamp updated_timestamp].include?(key) }
         publication(publisher, [path], directory)
-        check(frontmatter(path).reject { |key, _| %w[published published_timestamp].include?(key) } == expected,
+        if prior.key?("published_timestamp")
+            check(frontmatter(path)["published_timestamp"] == prior["published_timestamp"] &&
+                  frontmatter(path).key?("updated_timestamp"), "Flow/multiline original timestamp changed")
+        end
+        check(frontmatter(path).reject { |key, _| %w[published published_timestamp updated_timestamp].include?(key) } == expected,
               "Flow/multiline metadata changed")
         check(File.binread(path).end_with?(body), "Flow/multiline body changed")
         publication(publisher, ["--unpublish", path], directory)
@@ -156,6 +199,10 @@ Dir.mktmpdir("pelgish-publish-check-") do |directory|
         "---\n---\nbody\n", "---\ntitle: Missing close\n",
         "---\npublished: false\n'published': true\n---\nbody\n",
         "---\npublished_timestamp: old\npublished_timestamp: new\n---\nbody\n",
+        "---\nupdated_timestamp: old\n'updated_timestamp': new\n---\nbody\n",
+        "---\nupdated_timestamp: [broken\n---\nbody\n",
+        "---\nupdated_timestamp: !ruby/object:Object {}\n---\nbody\n",
+        "---\nbase: &base {updated_timestamp: old}\n<<: *base\n---\nbody\n",
         "---\nvalue: !ruby/object:Object {}\n---\nbody\n",
         "---\nbase: &base {published: true}\n<<: *base\n---\nbody\n"
     ]
@@ -180,7 +227,7 @@ Dir.mktmpdir("pelgish-publish-check-") do |directory|
     end
     check(Dir.children(directory).sort == ["a poem.md", "data.txt", "link.md"], "Publish left helper artifacts")
 end
-puts "PASS: publication CLI persistence, fresh UTC timestamps, safe errors, bytes, modes, spaces, cwd, and idempotence"
+puts "PASS: publication CLI original/update UTC timestamps, reset on unpublish, safe errors, bytes, modes, spaces, cwd, and idempotence"
 
 # Stub Bundler to check wrapper arguments without starting a preview server.
 Dir.mktmpdir("pelgish-serve-check-") do |directory|
@@ -391,6 +438,10 @@ Dir.mktmpdir("pelgish-check-") do |source|
     structural_source = File.join(source, "content/haiku/_random.md")
     FileUtils.cp(File.join(root, "content/haiku/_random.md"), structural_source)
     structural_bytes = File.binread(structural_source)
+    story_source = File.join(source, "content/story/_random.md")
+    FileUtils.mkdir_p(File.dirname(story_source))
+    FileUtils.cp(File.join(root, "content/story/_random.md"), story_source)
+    story_bytes = File.binread(story_source)
 
     # Control build time and YAML types to verify single years, ranges, and fallback.
     config_path = File.join(source, "_config.yml")
@@ -428,6 +479,14 @@ Dir.mktmpdir("pelgish-check-") do |source|
     random_path = File.join(output, "haiku/random.html")
     empty_random = File.read(random_path)
     check(random_targets(empty_random) == [], "Empty random reader must exclude itself")
+    story_random_path = File.join(output, "story/random.html")
+    empty_story_random = File.read(story_random_path)
+    check(random_targets(empty_story_random, "story") == [], "Empty story reader must exclude itself")
+    check(empty_story_random.include?("<title>pelgish.ink</title>") &&
+          !frontmatter(story_source).key?("published_timestamp"),
+          "Story reader must use the normal title fallback without publication metadata")
+    check(!File.exist?(File.join(output, "story/_random.html")),
+          "Story structural source must not leak its native underscore URL")
     check(!File.exist?(File.join(output, "haiku/_random.html")) &&
           !File.exist?(File.join(output, "content")), "Underscore source leaked or ignored its permalink")
     check(!frontmatter(structural_source).key?("published_timestamp"), "Structural page needs no publication timestamp")
@@ -438,13 +497,17 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(empty_story.match?(/<h1\b[^>]*>Short Stories<\/h1>/) &&
           empty_story.include?("No short stories have been published yet.") &&
           empty_story.include?('rel="canonical" href="https://pelgish.ink/story"') &&
-          !File.exist?(File.join(output, "story")),
+          File.read(File.join(output, "story/index.html")) == empty_story,
           "Empty story listing must use a slashless canonical with HTML backing")
+    # Shuffled dates cover missing published/draft timestamps, mixed YAML types,
+    # equal instants, and an update date that must not override original publication.
     story_fixtures = {
-        "story/alpha.md" => "title: 'A <script> & \"story\"'\npublished: true\n",
-        "story/nested/untitled.md" => "published: true\n",
+        "story/alpha.md" => "title: 'A <script> & \"story\"'\npublished: true\npublished_timestamp: '1999-01-01T00:00:00Z'\nupdated_timestamp: '2099-01-01T00:00:00Z'\n",
+        "story/nested/untitled.md" => "published: true\npublished_timestamp: 2020-01-01T00:00:00Z\n",
         "story/blank.md" => "title: '  '\npublished: true\n",
-        "story/override.md" => "title: Override\npublished: true\npermalink: /elsewhere/story.html\n",
+        "story/override.md" => "title: Override\npublished: true\npublished_timestamp: '2025-01-01T00:00:00Z'\npermalink: /elsewhere/story.html\n",
+        "story/tie.md" => "published: true\npublished_timestamp: '2020-01-01T00:00:00Z'\n",
+        "story/dated_draft.md" => "published: false\npublished_timestamp: '2022-01-01T00:00:00Z'\n",
         "story/draft.md" => "title: Explicit draft\npublished: false\n",
         "story/implicit.md" => "title: Implicit draft\n",
         "story/index.md" => "title: Structural index\npublished: true\n",
@@ -463,14 +526,37 @@ Dir.mktmpdir("pelgish-check-") do |source|
         html = File.read(story_path)
         main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
         expected = [
-            ["/story/alpha", "A &lt;script&gt; &amp; &quot;story&quot;"],
             ["/story/blank", "blank"],
             ["/elsewhere/story", "Override"],
-            ["/story/nested/untitled", "untitled"]
-        ].map { |url, title| [baseurl + url, title] }
-        links = main.scan(/<li><a href="([^"]+)">([^<]*)<\/a><\/li>/)
+            ["/story/tie", "tie"],
+            ["/story/nested/untitled", "untitled"],
+            ["/story/alpha", "A &lt;script&gt; &amp; &quot;story&quot;"]
+        ]
+        expected_random = expected.map { |url, _| baseurl + url }
+        check(random_targets(File.read(story_random_path), "story").sort == expected_random.sort,
+              "Random story targets must include only authored published sources, even during draft previews")
+        check(main.match?(/\A\s*(?:<!--.*?-->\s*)?<div class="story-heading">\s*<h1>Short Stories<\/h1>\s*<a class="icon-control" href="#{Regexp.escape(baseurl)}\/story\/random" aria-label="Read a random story" title="Read a random story">\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<\/a>\s*<\/div>\s*<ul>/m) &&
+              main.scan(/aria-label="Read a random story"/).length == 1 && !main.include?("hero-control"),
+              "Story heading must have exactly one compact accessible arrow-circle control at its right")
+        if unpublished
+            expected.insert(1, ["/story/draft", "Explicit draft", "[UNPUBLISHED] "], ["/story/implicit", "Implicit draft", "[UNPUBLISHED] "])
+            expected.insert(4, ["/story/dated-draft", "dated_draft", "[UNPUBLISHED] "])
+        end
+        expected = expected.map { |url, title, marker| [baseurl + url, title, marker.to_s] }
+        links = main.scan(/<li>([^<]*)<a href="([^"]+)">([^<]*)<\/a><\/li>/).map { |marker, url, title| [url, title, marker] }
         check(links == expected,
-              "Story list must include only published Markdown stories, safely titled and deterministically ordered: #{links.inspect}")
+              "Story list must match native publication mode, safely titled and deterministically ordered, prefixing only missing/false publication outside anchors: #{links.inspect}")
+        expected.each do |url, _|
+            backing = File.join(output, "#{url.delete_prefix(baseurl).delete_prefix("/")}.html")
+            check(File.read(backing).include?("rel=\"canonical\" href=\"https://pelgish.ink#{url}\""),
+                  "Listed story must have generated canonical/backing: #{url}")
+            check(File.read(backing).include?('<article class="writing prose">'),
+                  "Random story targets must expose a prose article")
+        end
+        %w[draft implicit dated-draft].each do |name|
+            check(File.exist?(File.join(output, "story/#{name}.html")) == unpublished,
+                  "Story draft output must match native publication mode: #{name}")
+        end
         check(!main.include?("No short stories") && !main.include?("<script") &&
               !main.include?("<time") && !main.include?("Fixture body."),
               "Story listing must be static links without bodies, dates, or client fetching")
@@ -485,7 +571,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     story_fixtures.each_key { |name| File.unlink(File.join(source, "content", name)) }
     build(source)
-    puts "PASS: static story listing empty/multiple, drafts in previews, nested sources, overrides, escaped/fallback titles, structural exclusions, baseurl, and home link"
+    puts "PASS: story listing missing timestamps first, newest original publication first, mixed timestamp types, name-ordered ties, preview drafts, nested sources, overrides, safe titles, exclusions, baseurl, and home link"
 
     # Haiku listing uses source membership, safe labels and actual generated routes.
     haiku_path = File.join(output, "haiku.html")
@@ -494,10 +580,12 @@ Dir.mktmpdir("pelgish-check-") do |source|
     check(File.read(File.join(output, "haiku/index.html")) == File.read(haiku_path),
           "Directory-backed haiku index must match its slashless HTML backing")
     haiku_fixtures = {
-        "haiku/alpha_verse.md" => "title: 'A <verse> & \"haiku\"'\npublished: true\n",
+        "haiku/alpha_verse.md" => "title: 'A <verse> & \"haiku\"'\npublished: true\npublished_timestamp: '1999-01-01T00:00:00Z'\nupdated_timestamp: '2099-01-01T00:00:00Z'\n",
         "haiku/nested_folder/blank_title.md" => "title: '  '\npublished: true\n",
-        "haiku/override.md" => "published: true\npermalink: /elsewhere/kept_underscore\n",
-        "haiku/untitled.markdown" => "published: true\n",
+        "haiku/override.md" => "published: true\npublished_timestamp: '2025-01-01T00:00:00Z'\npermalink: /elsewhere/kept_underscore\n",
+        "haiku/untitled.markdown" => "published: true\npublished_timestamp: 2020-01-01T00:00:00Z\n",
+        "haiku/tie.md" => "published: true\npublished_timestamp: '2020-01-01T00:00:00Z'\n",
+        "haiku/dated_draft.md" => "published: false\npublished_timestamp: '2022-01-01T00:00:00Z'\n",
         "haiku/draft.md" => "title: Draft\npublished: false\n",
         "haiku/implicit.md" => "title: Implicit draft\n",
         "haiku/structure.md" => "published: true\nliterary_content: false\n",
@@ -518,14 +606,27 @@ Dir.mktmpdir("pelgish-check-") do |source|
               !main.include?("hero-control"),
               "Haiku listing must share one row between its heading and compact accessible arrow-circle control")
         expected = [
-            ["/haiku/alpha-verse", "A &lt;verse&gt; &amp; &quot;haiku&quot;"],
             ["/haiku/nested_folder/blank-title", "blank_title"],
             ["/elsewhere/kept_underscore", "override"],
-            ["/haiku/untitled", "untitled"]
-        ].map { |url, title| [baseurl + url, title] }
-        links = main.scan(/<li><a href="([^"]+)">([^<]*)<\/a><\/li>/)
+            ["/haiku/tie", "tie"],
+            ["/haiku/untitled", "untitled"],
+            ["/haiku/alpha-verse", "A &lt;verse&gt; &amp; &quot;haiku&quot;"]
+        ]
+        expected_random = expected.map { |url, _| baseurl + url }
+        if unpublished
+            expected.insert(1, ["/haiku/draft", "Draft", "[UNPUBLISHED] "], ["/haiku/implicit", "Implicit draft", "[UNPUBLISHED] "])
+            expected.insert(4, ["/haiku/dated-draft", "dated_draft", "[UNPUBLISHED] "])
+        end
+        expected = expected.map { |url, title, marker| [baseurl + url, title, marker.to_s] }
+        links = main.scan(/<li>([^<]*)<a href="([^"]+)">([^<]*)<\/a><\/li>/).map { |marker, url, title| [url, title, marker] }
         check(links == expected,
-              "Haiku listing must exclude drafts/self and preserve escaped/fallback labels, nested routes and overrides: #{links.inspect}")
+              "Haiku listing must match native publication mode, exclude structural pages, and preserve labels/routes, prefixing only missing/false publication outside anchors: #{links.inspect}")
+        check(random_targets(File.read(random_path)).sort == expected_random.sort,
+              "Random targets must remain published-only even when draft haikus are listed")
+        %w[draft implicit dated-draft].each do |name|
+            check(File.exist?(File.join(output, "haiku/#{name}.html")) == unpublished,
+                  "Haiku draft output must match native publication mode: #{name}")
+        end
         check(html.include?("rel=\"canonical\" href=\"https://pelgish.ink#{baseurl}/haiku\"") &&
               main.include?("href=\"#{baseurl}/haiku/random\"") &&
               !main.include?("No haikus") && !main.include?("Fixture body."),
@@ -550,15 +651,18 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
     haiku_fixtures.each_key { |name| File.unlink(File.join(source, "content", name)) }
     build(source)
-    puts "PASS: haiku index, publication filtering, filename slugs, unchanged folders/overrides, links, canonicals and HTML backing"
+    puts "PASS: haiku listing missing timestamps first, newest original publication first, mixed timestamp types, name-ordered ties, preview drafts, filename slugs, unchanged folders/overrides, canonicals and HTML backing"
 
     # Native underscore discovery and URL serialization also work with exactly one target.
-    single = File.join(source, "content/haiku/only.md")
-    File.write(single, "---\npublished: true\npermalink: '/elsewhere/one two&\"three\"<end'\n---\nOnly body.\n")
-    build(source)
-    check(random_targets(File.read(random_path)) == ["/elsewhere/one%20two&%22three%22%3Cend"],
-          "Single overridden target was not safely encoded/serialized")
-    File.unlink(single)
+    %w[haiku story].each do |kind|
+        single = File.join(source, "content/#{kind}/only.markdown")
+        File.write(single, "---\npublished: true\npermalink: '/elsewhere/one two&\"three\"<end'\n---\nOnly body.\n")
+        build(source)
+        check(random_targets(File.read(File.join(output, "#{kind}/random.html")), kind) ==
+              ["/elsewhere/one%20two&%22three%22%3Cend"],
+              "Single #{kind} Markdown target was not safely encoded/serialized")
+        File.unlink(single)
+    end
 
     # Markdown hard breaks must become actual br elements, with separate stanzas.
     fixtures = {
@@ -683,6 +787,17 @@ Dir.mktmpdir("pelgish-check-") do |source|
                   "Draft preview must serve random page without draft targets")
             check(request.call(port, "/haiku/random.html").body == random_response.body,
                   "Random slashless route must match its HTML backing")
+            story_response = request.call(port, "/story/random")
+            preview_story = story_response.body.sub(/<script>\s*document\.write\(.*?livereload\.js.*?<\/script>/m, "")
+            check(story_response.code == "200" && story_response["location"].nil? &&
+                  random_targets(preview_story, "story") == ["/story/served"] &&
+                  request.call(port, "/story/random.html").body == story_response.body &&
+                  request.call(port, "/story/random/").body == story_response.body,
+                  "Story reader endpoint must serve its shared shell and only published story targets without redirects")
+            check(request.call(port, "/story/served").body.include?('<article class="writing prose">') &&
+                  request.call(port, "/content/story/_random.md").code == "404" &&
+                  request.call(port, "/content/story/served.md").code == "404",
+                  "Story target must expose prose HTML without raw source Markdown")
             %w[haiku story].each do |route|
                 bare = request.call(port, "/#{route}")
                 check(bare.code == "301" && URI(bare["location"]).path == "/#{route}/",
@@ -837,6 +952,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
         check(!File.exist?(output_path.call(output, name)), "Draft page leaked: #{name}")
     end
     check(File.binread(structural_source) == structural_bytes, "Structural reader was edited by publication tests")
+    check(File.binread(story_source) == story_bytes, "Story reader was edited by publication tests")
 
     # Unpublication deletes persisted fields and removes an already-built public URL.
     path = File.join(source, "content/prose.md")
@@ -875,31 +991,33 @@ Dir.mktmpdir("pelgish-check-") do |source|
     end
 
     # Reserved route aliases must fail instead of silently overwriting the reader.
-    collision = File.join(source, "content/haiku/collision.md")
-    ["/haiku/random", "/haiku/random.html", "/haiku/random/", "/haiku/random/index.html"].each do |permalink|
-        File.write(collision, "---\npublished: true\npermalink: #{permalink}\n---\nCollision.\n")
-        begin
-            build(source)
-            raise "Reserved random route was overwritten"
-        rescue Jekyll::Errors::FatalException => error
-            check(error.message.include?("/haiku/random is reserved"), "Missing reserved-route error")
-        ensure
-            File.unlink(collision)
-        end
-    end
-    ["haiku/random", "haiku/random.html", "haiku/random/index.html"].each do |relative_path|
-        collision = File.join(source, relative_path)
-        FileUtils.mkdir_p(File.dirname(collision))
-        File.write(collision, "Static collision")
-        begin
-            build(source)
-            raise "Static file occupied reserved random route"
-        rescue Jekyll::Errors::FatalException => error
-            check(error.message.include?("/haiku/random is reserved"), "Missing static collision error")
-        ensure
-            File.unlink(collision)
-            FileUtils.rmdir(File.dirname(collision)) if relative_path.end_with?("/index.html")
-        end
+    %w[haiku story].each do |kind|
+            collision = File.join(source, "content/#{kind}/collision.md")
+            ["/#{kind}/random", "/#{kind}/random.html", "/#{kind}/random/", "/#{kind}/random/index.html"].each do |permalink|
+                File.write(collision, "---\npublished: true\npermalink: #{permalink}\n---\nCollision.\n")
+                begin
+                    build(source)
+                    raise "Reserved random route was overwritten"
+                rescue Jekyll::Errors::FatalException => error
+                    check(error.message.include?("/#{kind}/random is reserved"), "Missing reserved-route error")
+                ensure
+                    File.unlink(collision)
+                end
+            end
+            ["#{kind}/random", "#{kind}/random.html", "#{kind}/random/index.html"].each do |relative_path|
+                collision = File.join(source, relative_path)
+                FileUtils.mkdir_p(File.dirname(collision))
+                File.write(collision, "Static collision")
+                begin
+                    build(source)
+                    raise "Static file occupied reserved random route"
+                rescue Jekyll::Errors::FatalException => error
+                    check(error.message.include?("/#{kind}/random is reserved"), "Missing static collision error")
+                ensure
+                    File.unlink(collision)
+                    FileUtils.rmdir(File.dirname(collision)) if relative_path.end_with?("/index.html")
+                end
+            end
     end
 
     # Bare Markdown must fail clearly rather than copying a draft as a public asset.

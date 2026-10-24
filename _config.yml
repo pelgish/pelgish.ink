@@ -28,6 +28,7 @@ strict_front_matter: true
 
 include:
     - content/haiku/_random.md
+    - content/story/_random.md
 
 exclude:
     - "**/*:sec.endpointdlp"

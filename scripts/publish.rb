@@ -4,7 +4,7 @@ require "date"
 require "time"
 require "tempfile"
 
-PUBLICATION_KEYS = %w[published published_timestamp].freeze
+PUBLICATION_KEYS = %w[published published_timestamp updated_timestamp].freeze
 USAGE = "Usage: publish.sh [--unpublish] PATH.md (flag may also follow path)".freeze
 
 # Load YAML as data only; dates and timestamps are standard frontmatter values.
@@ -40,9 +40,12 @@ def publish(path, unpublish)
         PUBLICATION_KEYS.any? { |key| data.key?(key) && fields.none? { |node, _| node.value == key } }
 
     desired = data.reject { |key, _| PUBLICATION_KEYS.include?(key) }
+    preserve_original = !unpublish && data.key?("published_timestamp")
     unless unpublish
         desired["published"] = true
-        desired["published_timestamp"] = Time.now.utc.iso8601
+        desired["published_timestamp"] = data["published_timestamp"] if preserve_original
+        timestamp_key = preserve_original ? "updated_timestamp" : "published_timestamp"
+        desired[timestamp_key] = Time.now.utc.iso8601
     end
 
     # Block mappings keep every unrelated line, including comments and scalar styles.
@@ -53,10 +56,13 @@ def publish(path, unpublish)
     else
         lines = yaml.lines
         fields.each do |key, value|
+            # Retain the original timestamp's spelling, type, style, and comments.
+            next if preserve_original && key.value == "published_timestamp"
+
             last = value.end_line + (value.end_column.positive? ? 1 : 0)
             (key.start_line...last).each { |line| lines[line] = "" }
         end
-        additions = unpublish ? "" : "published: true#{newline}published_timestamp: \"#{desired['published_timestamp']}\"#{newline}"
+        additions = unpublish ? "" : "published: true#{newline}#{timestamp_key}: \"#{desired[timestamp_key]}\"#{newline}"
         lines.insert(mapping.end_line, additions)
         updated = lines.join
     end

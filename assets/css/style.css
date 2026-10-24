@@ -221,7 +221,8 @@ button, input, select, textarea {
 }
 
 /* Keep the compact listing action at the reading column's right edge. */
-.haiku-heading {
+.haiku-heading,
+.story-heading {
     align-items: center;
     display: flex;
     gap: 1rem;
@@ -229,7 +230,8 @@ button, input, select, textarea {
     margin: 1.5rem 0;
 }
 
-.haiku-heading h1 {
+.haiku-heading h1,
+.story-heading h1 {
     margin: 0;
     min-width: 0;
 }
@@ -242,7 +244,8 @@ button, input, select, textarea {
 
 .home-controls .control-icon,
 .hero-control .control-icon,
-.haiku-heading .control-icon {
+.haiku-heading .control-icon,
+.story-heading .control-icon {
     transition: transform 1000ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -254,7 +257,8 @@ button, input, select, textarea {
 /* Native press feedback moves only artwork, not labels or touch targets. */
 .home-controls .icon-control:active .control-icon,
 .hero-control:active .control-icon,
-.haiku-heading .icon-control:active .control-icon {
+.haiku-heading .icon-control:active .control-icon,
+.story-heading .icon-control:active .control-icon {
     transform: scale(1.15);
 }
 
@@ -262,7 +266,8 @@ button, input, select, textarea {
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
     .home-controls .icon-control:hover .control-icon,
     .hero-control:hover .control-icon,
-    .haiku-heading .icon-control:hover .control-icon {
+    .haiku-heading .icon-control:hover .control-icon,
+    .story-heading .icon-control:hover .control-icon {
         transform: scale(1.15);
     }
 }
@@ -399,7 +404,9 @@ pre {
     .hero-control .control-icon,
     .hero-control:active .control-icon,
     .haiku-heading .control-icon,
-    .haiku-heading .icon-control:active .control-icon {
+    .haiku-heading .icon-control:active .control-icon,
+    .story-heading .control-icon,
+    .story-heading .icon-control:active .control-icon {
         transform: none;
         transition: none;
     }
