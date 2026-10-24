@@ -132,43 +132,67 @@ button, input, select, textarea {
     flex-shrink: 0;
     height: 2rem;
     width: 2rem;
-    -webkit-mask: var(--icon-image) center / contain no-repeat;
-    mask: var(--icon-image) center / contain no-repeat;
+    /* Explicit longhands also support browsers with only prefixed masking. */
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    mask-mode: alpha;
 }
 
 .icon-haiku {
-    --icon-image: url("../images/icon_haiku.png");
+    -webkit-mask-image: url("../images/icon_haiku.png");
+    mask-image: url("../images/icon_haiku.png");
 }
 
 .icon-shortstory {
-    --icon-image: url("../images/icon_shortstory.png");
+    -webkit-mask-image: url("../images/icon_shortstory.png");
+    mask-image: url("../images/icon_shortstory.png");
 }
 
 .appearance-moon {
-    --icon-image: url("../images/icon_moon.png");
+    -webkit-mask-image: url("../images/icon_moon.png");
+    mask-image: url("../images/icon_moon.png");
 }
 
 .appearance-sun {
-    --icon-image: url("../images/icon_sun.png");
+    -webkit-mask-image: url("../images/icon_sun.png");
+    mask-image: url("../images/icon_sun.png");
 }
 
 .home-controls {
-    align-items: flex-start;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    align-items: start;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: 1.5rem;
     margin-bottom: 1.5rem;
 }
 
 .home-controls .icon-control {
+    flex-direction: column;
+    font-size: 1.3rem;
     gap: 1rem;
     max-width: 100%;
-    text-align: left;
+    padding: 0.5rem;
+    text-align: center;
 }
 
 .home-controls .control-icon {
-    height: clamp(80px, 24vw, 112px);
-    width: clamp(80px, 24vw, 112px);
+    height: clamp(64px, 20vw, 112px);
+    width: clamp(64px, 20vw, 112px);
+}
+
+/* Only pointer hover animates home artwork; labels and touch targets stay put. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .home-controls .control-icon {
+        transition: transform 1000ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .home-controls .icon-control:hover .control-icon {
+        transform: scale(1.15);
+    }
 }
 
 /* The visible glyph represents the next action, not the current mode. */
