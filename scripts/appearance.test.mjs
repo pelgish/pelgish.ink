@@ -232,7 +232,7 @@ test("shared logo is an accessible home link with proportional theme-tinted artw
     assert.match(markup, /<title>\{\{ page.title \| default: site.title \| escape \}\}<\/title>/);
     const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
     const logo = css.match(/\.site-logo\s*\{([^}]+)\}/)[1];
-    for (const declaration of ["aspect-ratio: 16 / 5", "background: currentColor",
+    for (const declaration of ["background: currentColor",
         "display: block", "width: 100%", "mask-mode: alpha"]) {
         assert.ok(logo.includes(declaration), declaration);
     }
@@ -250,6 +250,18 @@ test("shared logo is an accessible home link with proportional theme-tinted artw
     assert.ok(css.search(active) > css.search(hover), "Press feedback must follow hover/default rules");
     assert.doesNotMatch(logo, /transform|animation|transition/);
     assert.doesNotMatch(css, /h1, h2, h3, h4, h5, h6, \.site-title/);
+});
+
+test("empty logo reserves proportional height without aspect-ratio support", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const logo = css.match(/\.site-logo\s*\{([^}]+)\}/)[1];
+    // Empty flex children need a height source even when aspect-ratio is ignored.
+    assert.match(logo, /(?:^|;)\s*height:\s*0\s*;/);
+    assert.match(logo, /(?:^|;)\s*flex-shrink:\s*0\s*;/);
+    const padding = Number(logo.match(/padding-bottom:\s*([\d.]+)%;/)?.[1]);
+    const png = readFileSync(new URL("../assets/images/logo.png", import.meta.url));
+    assert.equal(padding / 100, png.readUInt32BE(20) / png.readUInt32BE(16),
+        "Percentage padding must preserve the original PNG proportions independently of aspect-ratio");
 });
 
 test("home copyright uses a growing viewport layout, not a fixed overlay", () => {
