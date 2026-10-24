@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import { inflateSync } from "node:zlib";
 import assert from "node:assert/strict";
 
 const script = readFileSync(new URL("../assets/js/appearance.js", import.meta.url), "utf8");
@@ -116,12 +117,62 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
     assert.match(css, /\.icon-control:hover\s*\{\s*color: var\(--accent-link\)/);
     assert.match(css, /:focus-visible\s*\{[^}]*outline: 2px solid currentColor/);
     assert.match(css, /\.icon-control:not\(\[hidden\]\)\s*\{[^}]*display: inline-flex/);
-    assert.match(css, /\.control-icon\s*\{[^}]*background: currentColor;[^}]*mask: var\(--icon-image\) center \/ contain no-repeat/);
+    const glyph = css.match(/\.control-icon\s*\{([^}]+)\}/)[1];
+    assert.ok(glyph.includes("background: currentColor"));
+    assert.ok(glyph.includes("mask-mode: alpha"));
+    for (const prefix of ["-webkit-", ""]) {
+        for (const [property, value] of [["position", "center"], ["size", "contain"], ["repeat", "no-repeat"]]) {
+            assert.ok(glyph.includes(`\n    ${prefix}mask-${property}: ${value};`));
+        }
+    }
     for (const icon of ["haiku", "shortstory", "moon", "sun"]) {
-        assert.ok(css.includes(`url("../images/icon_${icon}.png")`));
+        const selector = ["moon", "sun"].includes(icon) ? `appearance-${icon}` : `icon-${icon}`;
+        const rule = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]+)\\}`))[1];
+        for (const prefix of ["-webkit-", ""]) {
+            assert.ok(rule.includes(`\n    ${prefix}mask-image: url("../images/icon_${icon}.png");`));
+        }
     }
     assert.match(css, /\.appearance-sun,\s*:root\[data-appearance="dark"\] \.appearance-moon\s*\{\s*display: none/);
     assert.match(css, /:root\[data-appearance="dark"\] \.appearance-sun\s*\{\s*display: inline-block/);
+});
+
+test("supplied mask PNGs decode with visible strokes and transparent surrounding pixels", () => {
+    for (const icon of ["haiku", "shortstory", "moon", "sun"]) {
+        const png = readFileSync(new URL(`../assets/images/icon_${icon}.png`, import.meta.url));
+        assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+        const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+        assert.equal(width, 512);
+        assert.equal(height, 512);
+        assert.equal(png[24], 8);
+        assert.equal(png[25], 6, `${icon} requires RGBA transparency`);
+        assert.equal(png[28], 0, "non-interlaced PNG");
+        const chunks = [];
+        for (let offset = 8; offset < png.length;) {
+            const length = png.readUInt32BE(offset);
+            if (png.toString("ascii", offset + 4, offset + 8) === "IDAT") {
+                chunks.push(png.subarray(offset + 8, offset + 8 + length));
+            }
+            offset += length + 12;
+        }
+        const rows = inflateSync(Buffer.concat(chunks)), stride = width * 4 + 1;
+        assert.equal(rows.length, stride * height);
+        const alpha = new Uint8Array(width * height);
+        // PNG row predictors use the same channel of neighboring RGBA pixels.
+        for (let y = 0; y < height; y++) {
+            const filter = rows[y * stride];
+            for (let x = 0; x < width; x++) {
+                const i = y * width + x, a = x ? alpha[i - 1] : 0;
+                const b = y ? alpha[i - width] : 0, c = x && y ? alpha[i - width - 1] : 0;
+                const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+                const paeth = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+                const predictor = [0, a, b, Math.floor((a + b) / 2), paeth][filter];
+                assert.notEqual(predictor, undefined, "valid PNG filter");
+                alpha[i] = (rows[y * stride + 1 + x * 4 + 3] + predictor) & 255;
+            }
+        }
+        assert.ok(alpha.includes(0), `${icon} must not render as a solid rectangle`);
+        assert.ok(alpha.includes(255), `${icon} must have visible strokes`);
+    }
 });
 
 test("home copyright uses a growing viewport layout, not a fixed overlay", () => {
@@ -135,8 +186,14 @@ test("home copyright uses a growing viewport layout, not a fixed overlay", () =>
 
 test("home categories have large responsive icons; header aligns visual centers", () => {
     const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
-    assert.match(css, /\.home-controls\s*\{[^}]*flex-direction: column/);
+    assert.match(css, /\.home-controls\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 14rem\), 1fr\)\)/);
+    assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*flex-direction: column;[^}]*font-size: 1.3rem/);
     assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*gap: 1rem;[^}]*max-width: 100%/);
-    assert.match(css, /\.home-controls \.control-icon\s*\{\s*height: clamp\(80px, 24vw, 112px\);\s*width: clamp\(80px, 24vw, 112px\)/);
+    assert.match(css, /\.home-controls \.icon-control\s*\{[^}]*padding: 0.5rem;[^}]*text-align: center/);
+    assert.match(css, /\.home-controls \.control-icon\s*\{\s*height: clamp\(64px, 20vw, 112px\);\s*width: clamp\(64px, 20vw, 112px\)/);
+    assert.match(css, /\.home-controls \.control-icon\s*\{[^}]*transition: transform 1000ms cubic-bezier\(0.16, 1, 0.3, 1\)/);
+    assert.match(css, /\.home-controls \.icon-control:active \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.home-controls \.icon-control:hover \.control-icon\s*\{\s*transform: scale\(1.15\)/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.home-controls \.control-icon,\s*\.home-controls \.icon-control:active \.control-icon\s*\{\s*transform: none;\s*transition: none;\s*\}\s*\}\s*$/);
     assert.match(css, /\.site-header\s*\{\s*align-items: center;\s*display: flex/);
 });
