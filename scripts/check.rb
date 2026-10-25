@@ -27,7 +27,7 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
     main = html[/<main\b[^>]*>(.*?)<\/main>/m, 1]
     controls = main&.slice!(/<section class="home-controls" aria-label="Explore writing">.*?<\/section>/m)
     check(controls, "Home icon controls missing")
-    prefix = html[/href="([^"]*)\/assets\/css\/style.css"/, 1]
+    prefix = html[/href="([^"]*)\/assets\/css\/style.css\?v=\d+"/, 1]
     check_logo(html, prefix)
     check(controls.include?("href=\"#{prefix}/haiku\"") &&
           controls.include?('aria-label="Haikus"'), "Haiku control must link to the haiku listing")
@@ -80,7 +80,7 @@ def random_targets(html, kind = "haiku")
           html.scan(/<script\b[^>]*src="([^"]+)"/).flatten ==
               ["#{prefix}/assets/js/appearance.js", "#{prefix}/assets/js/random-haiku.js"] &&
           html.include?("src=\"#{prefix}/assets/js/random-haiku.js\" defer>") &&
-          html.include?("href=\"#{prefix}/assets/css/style.css\""),
+          html.match?(/href="#{Regexp.escape(prefix)}\/assets\/css\/style.css\?v=\d+"/),
           "Random reader must load the shared appearance/styles and deferred reader with the URL prefix")
     check(main.scan(/<script id="#{kind}-targets" type="application\/json">/).length == 1,
           "Random reader must have exactly one generated target list")
@@ -573,7 +573,7 @@ Dir.mktmpdir("pelgish-check-") do |source|
               !main.include?("<time") && !main.include?("Fixture body."),
               "Story listing must be static links without bodies, dates, or client fetching")
         check(html.include?("rel=\"canonical\" href=\"https://pelgish.ink#{baseurl}/story\"") &&
-              html.include?("href=\"#{baseurl}/assets/css/style.css\"") &&
+              html.match?(/href="#{Regexp.escape(baseurl)}\/assets\/css\/style.css\?v=\d+"/) &&
               html.include?('id="appearance-toggle"') &&
               html.include?('data-color-scheme="grapevine"') &&
               html.include?('family=Cantarell:') &&
@@ -942,12 +942,12 @@ Dir.mktmpdir("pelgish-check-") do |source|
         end
         check(!html.match?(/Font Awesome|fontawesome|<svg\b|<path\b/i), "Obsolete icon markup or attribution survived")
         check(!html.include?("All writing") && !html.include?("<footer"), "Writing footer survived")
-        check(html.index('src="/assets/js/appearance.js"') < html.index('href="/assets/css/style.css"'),
+        check(html.index('src="/assets/js/appearance.js"') < html.index('href="/assets/css/style.css?v='),
               "Appearance must initialize before local CSS")
     end
     check(poem.match?(/<p>Line one<br\s*\/?>\s*Line two<\/p>/), "Verse line break missing")
     check(poem.include?("<p>Stanza two.</p>"), "Separate verse stanza missing")
-    check(prose.include?('href="/assets/css/style.css"'), "Stylesheet URL incorrect")
+    check(prose.match?(/href="\/assets\/css\/style.css\?v=\d+"/), "Stylesheet URL incorrect")
     check(prose.include?('href="#main"') && prose.include?('id="main"'), "Skip link target missing")
     check(File.size(File.join(output, "assets/css/style.css")) > 0, "Stylesheet missing")
     check(File.size(File.join(output, "assets/js/appearance.js")) > 0, "Appearance script missing")

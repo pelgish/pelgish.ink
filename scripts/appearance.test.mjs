@@ -1,5 +1,7 @@
 /* Exercise appearance initialization and updates without browser dependencies. */
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
 import { inflateSync } from "node:zlib";
@@ -197,6 +199,42 @@ test("ordinary links default to theme accent in every state without a class or u
     assert.match(css, /:root\[data-color-scheme="grapevine"\]\s*\{[^}]*--accent-link: #755E70;[^}]*--dark-accent-link: #A28F9D;/);
     assert.match(css, /:root\[data-appearance="dark"\]\s*\{[^}]*--accent-link: var\(--dark-accent-link\);/);
     assert.match(css, /@media \(prefers-color-scheme: dark\)\s*\{[^}]*--accent-link: var\(--dark-accent-link\);/);
+});
+
+test("generated stylesheet URLs bypass prior-build caches at root and preview baseurls", () => {
+    const root = fileURLToPath(new URL("../", import.meta.url));
+    // Build the actual shared shell, not a regex approximation of Liquid output.
+    const results = JSON.parse(execFileSync(`${root}scripts/bundle.sh`, ["exec", "ruby",
+        "-rjekyll", "-rtmpdir", "-rfileutils", "-rjson", "-e", `
+        root = ARGV.fetch(0)
+        results = []
+        Dir.mktmpdir("pelgish-appearance-") do |source|
+            %w[_config.yml _plugins _layouts assets].each do |path|
+                FileUtils.cp_r(File.join(root, path), source)
+            end
+            File.write(File.join(source, "index.md"), "---\\n---\\n[Ordinary link](/legal)\\n")
+            ["", "/preview"].each do |baseurl|
+                [Time.utc(2026, 10, 25, 12), Time.utc(2026, 10, 25, 13)].each do |time|
+                    config = Jekyll.configuration("source" => source,
+                        "destination" => File.join(source, "_site"),
+                        "baseurl" => baseurl, "time" => time, "quiet" => true)
+                    Jekyll::Site.new(config).process
+                    html = File.read(File.join(source, "_site/index.html"))
+                    href = html[/href="([^"]*\\/assets\\/css\\/style.css[^"]*)"/, 1]
+                    results << { baseurl: baseurl, revision: time.to_i, href: href,
+                        css: File.read(File.join(source, "_site/assets/css/style.css"), encoding: "UTF-8") }
+                end
+            end
+        end
+        puts JSON.generate(results)
+    `, root], { encoding: "utf8" }));
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    for (const { baseurl, revision, href, css: builtCss } of results) {
+        assert.equal(href, `${baseurl}/assets/css/style.css?v=${revision}`);
+        assert.equal(builtCss, css, "The versioned URL must still serve the original stylesheet");
+    }
+    assert.equal(new Set(results.map(({ href }) => href)).size, 4,
+        "Each baseurl and subsequent build must have a distinct cache key");
 });
 
 test("button links and native buttons share foreground defaults and accent interactions", () => {
