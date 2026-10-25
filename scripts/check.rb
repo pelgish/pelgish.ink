@@ -41,7 +41,7 @@ def check_home(html, years = Time.now.year == 2026 ? "2026" : "2026-#{Time.now.y
         check(controls.include?("<span class=\"control-icon icon-#{icon}\" aria-hidden=\"true\"></span>"),
               "Decorative home #{icon} icon missing")
     end
-    check(main&.strip&.match?(/\A<section class="home-copyright" aria-label="Copyright">\s*<p>All content on this site is copyright\(c\) Connor Shugg #{Regexp.escape(years)}<\/p>\s*<p>Writing and images are of my own original creation\.<\/p>\s*<\/section>\z/),
+    check(main&.strip&.match?(/\A<section class="home-copyright" aria-label="Copyright">\s*<p>All content on this site is copyright\(c\) Connor Shugg #{Regexp.escape(years)}\. All rights reserved\.<\/p>\s*<p>For inquiries, permissions, etc\., please <a class="accent-link" href="\/legal">click here<\/a>\.<\/p>\s*<\/section>\z/),
           "Home must contain only its icon controls and unchanged copyright with years #{years}")
     check(html.index(controls) < html.index('class="home-copyright"'), "Controls must precede copyright")
     check(html.include?('<body class="home-page">'), "Home-only viewport layout hook missing")
