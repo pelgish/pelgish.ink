@@ -163,7 +163,7 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
         "min-height: 44px", "min-width: 44px", "flex-shrink: 0", "color: var(--foreground)"]) {
         assert.ok(controls.includes(declaration), declaration);
     }
-    assert.match(css, /\.icon-control:hover\s*\{\s*color: var\(--accent-link\)/);
+    assert.match(css, /\.icon-control:hover,\s*\.icon-control:focus,\s*\.icon-control:active\s*\{\s*color: var\(--accent-link\)/);
     assert.match(css, /:focus-visible\s*\{[^}]*outline: 2px solid currentColor/);
     assert.match(css, /\.icon-control:not\(\[hidden\]\)\s*\{[^}]*display: inline-flex/);
     const glyph = css.match(/\.control-icon\s*\{([^}]+)\}/)[1];
@@ -184,6 +184,34 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
     assert.match(css, /\.appearance-sun,\s*\.icon-sun\s*\{[^}]*mask-image: url\("\.\.\/images\/icon_sun\.png"\)/);
     assert.match(css, /\.appearance-sun,\s*:root\[data-appearance="dark"\] \.appearance-moon\s*\{\s*display: none/);
     assert.match(css, /:root\[data-appearance="dark"\] \.appearance-sun\s*\{\s*display: inline-block/);
+});
+
+test("ordinary links default to theme accent in every state without a class or underline", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    assert.match(css, /(?:^|\n)a\s*\{\s*color: var\(--accent-link\);\s*text-decoration: none;\s*\}/);
+    // A bare type selector covers normal/visited/hover/focus/active equally.
+    // No state or opt-in class may raise specificity above shared controls.
+    assert.doesNotMatch(css, /(?:^|[,\s])a[.:]/m);
+    assert.doesNotMatch(css, /\.accent-link\b|!important/);
+    assert.match(css, /:focus-visible\s*\{\s*outline: 2px solid currentColor;\s*outline-offset: 4px;\s*\}/);
+    assert.match(css, /:root\[data-color-scheme="grapevine"\]\s*\{[^}]*--accent-link: #755E70;[^}]*--dark-accent-link: #A28F9D;/);
+    assert.match(css, /:root\[data-appearance="dark"\]\s*\{[^}]*--accent-link: var\(--dark-accent-link\);/);
+    assert.match(css, /@media \(prefers-color-scheme: dark\)\s*\{[^}]*--accent-link: var\(--dark-accent-link\);/);
+});
+
+test("button links and native buttons share foreground defaults and accent interactions", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const base = /\.icon-control,\s*\.icon-control:visited,\s*\.icon-control:focus,\s*\.icon-control:active\s*\{[^}]*color: var\(--foreground\);/;
+    const interaction = /\.icon-control:hover,\s*\.icon-control:focus,\s*\.icon-control:active\s*\{\s*color: var\(--accent-link\);\s*\}/;
+    assert.match(css, base);
+    assert.match(css, interaction);
+    // Classes beat the bare a selector; equal-specificity visited/interaction
+    // selectors resolve to the later interaction rule, even on visited links.
+    assert.ok(css.search(interaction) > css.search(base));
+    assert.match(css, /\.site-title,\s*\.site-title:visited,\s*\.site-title:hover,\s*\.site-title:focus\s*\{[^}]*color: var\(--heading\);/);
+    const logoInteraction = /\.site-title:focus-visible,\s*\.site-title:active\s*\{\s*color: var\(--accent-link\);/;
+    assert.match(css, logoInteraction);
+    assert.ok(css.search(logoInteraction) > css.indexOf(".site-title,"));
 });
 
 test("supplied mask PNGs decode with visible strokes and transparent surrounding pixels", () => {

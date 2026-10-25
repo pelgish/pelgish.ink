@@ -19,5 +19,5 @@ permalink: /
 {% assign copyright_end_year = site.time | date: "%Y" %}
 <section class="home-copyright" aria-label="Copyright">
     <p>All content on this site is copyright(c) Connor Shugg {{ copyright_start_year }}{% if copyright_start_year != copyright_end_year %}-{{ copyright_end_year }}{% endif %}. All rights reserved.</p>
-    <p>For inquiries, permissions, etc., please <a href="/legal">click here</a>.</p>
+    <p>For inquiries, permissions, etc., please <a class="accent-link" href="/legal">click here</a>.</p>
 </section>

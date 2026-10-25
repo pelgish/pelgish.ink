@@ -62,13 +62,10 @@ body {
     padding: 0 max(1rem, calc((100% - 42rem) / 2));
 }
 
-a, a:visited, a:hover, a:focus, a:active {
-    color: var(--link);
-    text-decoration: none;
-}
-
-a:hover {
+/* Text links keep their accent in every state; shared controls override it. */
+a {
     color: var(--accent-link);
+    text-decoration: none;
 }
 
 :focus-visible {
@@ -157,7 +154,9 @@ button, input, select, textarea {
     justify-content: center;
 }
 
-.icon-control:hover {
+.icon-control:hover,
+.icon-control:focus,
+.icon-control:active {
     color: var(--accent-link);
 }
 
