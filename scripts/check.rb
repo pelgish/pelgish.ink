@@ -63,9 +63,11 @@ def random_targets(html, kind = "haiku")
           "Random reader must start with an empty content host and hidden accessible status")
     check(main.match?(/<noscript>\s*<p>Enable JavaScript to read a random #{kind} on this page\.<\/p>\s*<\/noscript>/),
           "Random reader must explain the JavaScript requirement without JS")
-    check(main.match?(/<div id="#{kind}-content"#{data_kind}>\s*<\/div>\s*<button id="#{kind}-another" class="icon-control hero-control" type="button" aria-label="Get a new #{kind}" title="Get a new #{kind}" hidden(?:="")?>\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Get a new #{kind}<\/span>\s*<\/button>/) &&
-          main.scan(/id="#{kind}-another"/).length == 1,
-          "Accessible arrow-circle button must start hidden and follow the haiku host")
+    check(main.match?(/\A\s*<div class="random-reader-controls">\s*<a id="#{kind}-link" class="icon-control hero-control" hidden(?:="")?>\s*<span class="control-icon icon-link icon-wiggle" aria-hidden="true"><\/span>\s*<span>Link to this #{kind}<\/span>\s*<\/a>\s*<button id="#{kind}-another" class="icon-control hero-control" type="button" aria-label="Get a new #{kind}" title="Get a new #{kind}" hidden(?:="")?>\s*<span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"><\/span>\s*<span>Get a new #{kind}<\/span>\s*<\/button>\s*<\/div>\s*<p id="#{kind}-status"[^>]*>\s*<\/p>\s*<div id="#{kind}-content"#{data_kind}>\s*<\/div>/) &&
+          %W[#{kind}-link #{kind}-another #{kind}-content #{kind}-status].all? { |id| main.scan(/id="#{id}"/).length == 1 } &&
+          main.scan(/class="random-reader-controls"/).length == 1 &&
+          main.scan(/class="icon-control hero-control"/).length == 2,
+          "One hidden share link and accessible arrow-circle button must share a top row outside the writing host")
     check(!html.include?('class="home-page"') && !html.include?('class="home-copyright"') &&
           !html.include?("All content on this site is copyright(c)"),
           "Home layout or copyright leaked into the random reader")

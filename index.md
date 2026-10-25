@@ -5,13 +5,13 @@ permalink: /
 ---
 
 <section class="home-controls" aria-label="Explore writing">
-    <a class="icon-control" href="{{ '/haiku' | relative_url }}" aria-label="Haikus" title="Read haikus">
-        <span class="control-icon icon-haiku" aria-hidden="true"></span>
-        <span>Haikus</span>
-    </a>
     <a class="icon-control" href="{{ '/story' | relative_url }}" aria-label="Short Stories" title="Read short stories">
         <span class="control-icon icon-shortstory" aria-hidden="true"></span>
         <span>Short Stories</span>
+    </a>
+    <a class="icon-control" href="{{ '/haiku' | relative_url }}" aria-label="Haikus" title="Read haikus">
+        <span class="control-icon icon-haiku" aria-hidden="true"></span>
+        <span>Haikus</span>
     </a>
 </section>
 

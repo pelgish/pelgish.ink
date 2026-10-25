@@ -21,12 +21,18 @@ literary_content: false
     {%- endfor -%}
 {%- endcapture -%}
 {::nomarkdown}
+<div class="random-reader-controls">
+    <a id="haiku-link" class="icon-control hero-control" hidden>
+        <span class="control-icon icon-link icon-wiggle" aria-hidden="true"></span>
+        <span>Link to this haiku</span>
+    </a>
+    <button id="haiku-another" class="icon-control hero-control" type="button" aria-label="Get a new haiku" title="Get a new haiku" hidden>
+        <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
+        <span>Get a new haiku</span>
+    </button>
+</div>
 <p id="haiku-status" role="status" hidden></p>
 <div id="haiku-content"></div>
-<button id="haiku-another" class="icon-control hero-control" type="button" aria-label="Get a new haiku" title="Get a new haiku" hidden>
-    <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
-    <span>Get a new haiku</span>
-</button>
 <noscript><p>Enable JavaScript to read a random haiku on this page.</p></noscript>
 <script id="haiku-targets" type="application/json">[{{ targets }}]</script>
 <script src="{{ '/assets/js/random-haiku.js' | relative_url }}" defer></script>

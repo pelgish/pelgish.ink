@@ -208,6 +208,11 @@ button, input, select, textarea {
     mask-image: url("../images/icon_arrowcircle.png");
 }
 
+.icon-link {
+    -webkit-mask-image: url("../images/icon_link.png");
+    mask-image: url("../images/icon_link.png");
+}
+
 /* Independent rotation leaves each icon's hover/press scale available. */
 .icon-spin {
     animation: icon-spin var(--icon-spin-duration, 6s) linear infinite;
@@ -230,6 +235,44 @@ button, input, select, textarea {
 @keyframes icon-spin {
     from { rotate: 0turn; }
     to { rotate: 1turn; }
+}
+
+/* Override duration/angle per icon; independent rotation preserves growth. */
+.icon-wiggle {
+    animation-duration: var(--icon-wiggle-duration, 800ms);
+    animation-iteration-count: infinite;
+    animation-name: none;
+    animation-timing-function: ease-in-out;
+    rotate: none;
+    transform-origin: center;
+}
+
+/* Removing the animation at idle resets the artwork to neutral. */
+@media (prefers-reduced-motion: no-preference) {
+    .icon-wiggle:active,
+    .icon-control:active .icon-wiggle {
+        animation-name: icon-wiggle;
+    }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .icon-wiggle:hover,
+    .icon-control:hover .icon-wiggle {
+        animation-name: icon-wiggle;
+    }
+}
+
+@keyframes icon-wiggle {
+    /* Split ease-in-out at neutral so clockwise motion flows across the loop. */
+    0%, 100% {
+        rotate: 0deg;
+        animation-timing-function: cubic-bezier(0.29, 0.5, 0.58, 1);
+    }
+    25% { rotate: var(--icon-wiggle-angle, 6deg); }
+    75% {
+        rotate: calc(-1 * var(--icon-wiggle-angle, 6deg));
+        animation-timing-function: cubic-bezier(0.42, 0, 0.71, 0.5);
+    }
 }
 
 .home-controls {
@@ -292,6 +335,29 @@ button, input, select, textarea {
 .hero-control .icon-spin {
     height: clamp(56px, 16vw, 96px);
     width: clamp(56px, 16vw, 96px);
+}
+
+/* Random readers pair compact controls above the imported writing. */
+.random-reader-controls {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem clamp(1rem, 4vw, 2rem);
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+.random-reader-controls .hero-control {
+    font-size: 1rem;
+    gap: 0.5rem;
+    margin: 0;
+    width: clamp(6rem, 34vw, 10rem);
+}
+
+/* Match both masks, including the more specific spinning hero icon. */
+.random-reader-controls .hero-control .control-icon {
+    height: clamp(40px, 12vw, 64px);
+    width: clamp(40px, 12vw, 64px);
 }
 
 /* Native press feedback moves only artwork, not labels or touch targets. */
@@ -435,6 +501,11 @@ pre {
 
 @media (prefers-reduced-motion: reduce) {
     .icon-spin {
+        animation: none;
+        rotate: none;
+    }
+
+    .icon-wiggle {
         animation: none;
         rotate: none;
     }

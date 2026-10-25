@@ -24,12 +24,18 @@ literary_content: false
     {%- endfor -%}
 {%- endcapture -%}
 {::nomarkdown}
+<div class="random-reader-controls">
+    <a id="story-link" class="icon-control hero-control" hidden>
+        <span class="control-icon icon-link icon-wiggle" aria-hidden="true"></span>
+        <span>Link to this story</span>
+    </a>
+    <button id="story-another" class="icon-control hero-control" type="button" aria-label="Get a new story" title="Get a new story" hidden>
+        <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
+        <span>Get a new story</span>
+    </button>
+</div>
 <p id="story-status" role="status" hidden></p>
 <div id="story-content" data-kind="story"></div>
-<button id="story-another" class="icon-control hero-control" type="button" aria-label="Get a new story" title="Get a new story" hidden>
-    <span class="control-icon icon-arrowcircle icon-spin" aria-hidden="true"></span>
-    <span>Get a new story</span>
-</button>
 <noscript><p>Enable JavaScript to read a random story on this page.</p></noscript>
 <script id="story-targets" type="application/json">[{{ targets }}]</script>
 <script src="{{ '/assets/js/random-haiku.js' | relative_url }}" defer></script>

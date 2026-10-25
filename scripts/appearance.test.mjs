@@ -174,7 +174,7 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
             assert.ok(glyph.includes(`\n    ${prefix}mask-${property}: ${value};`));
         }
     }
-    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle"]) {
+    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle", "link"]) {
         const selector = ["moon", "sun"].includes(icon) ? `appearance-${icon}` : `icon-${icon}`;
         const rule = css.match(new RegExp(`\\.${selector}(?:,\\s*\\.icon-sun)?\\s*\\{([^}]+)\\}`))[1];
         for (const prefix of ["-webkit-", ""]) {
@@ -187,7 +187,7 @@ test("icon CSS uses palette colors, alpha masks, borderless targets and keyboard
 });
 
 test("supplied mask PNGs decode with visible strokes and transparent surrounding pixels", () => {
-    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle", "logo"]) {
+    for (const icon of ["haiku", "shortstory", "moon", "sun", "arrowcircle", "link", "logo"]) {
         const filename = icon === "logo" ? "logo.png" : `icon_${icon}.png`;
         const png = readFileSync(new URL(`../assets/images/${filename}`, import.meta.url));
         assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
@@ -321,6 +321,82 @@ test("reusable spin runs only on hover or press with configurable speed/directio
     }
     for (const kind of ["haiku", "story"]) {
         const reader = readFileSync(new URL(`../content/${kind}/_random.md`, import.meta.url), "utf8");
-        assert.match(reader, new RegExp(`id="${kind}-content"[\\s\\S]*id="${kind}-another" class="icon-control hero-control"[\\s\\S]*class="control-icon icon-arrowcircle icon-spin"[\\s\\S]*Get a new ${kind}`));
+        assert.match(reader, new RegExp(`id="${kind}-another" class="icon-control hero-control"[\\s\\S]*class="control-icon icon-arrowcircle icon-spin"[\\s\\S]*Get a new ${kind}[\\s\\S]*id="${kind}-content"`));
+    }
+});
+
+test("random readers pair compact controls with equal icons without changing other heroes", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    assert.match(css, /\.random-reader-controls\s*\{[^}]*align-items: flex-start;[^}]*display: flex;[^}]*flex-wrap: wrap;[^}]*gap: 1rem clamp\(1rem, 4vw, 2rem\);[^}]*justify-content: center;/);
+    assert.match(css, /\.random-reader-controls \.hero-control\s*\{[^}]*font-size: 1rem;[^}]*gap: 0.5rem;[^}]*margin: 0;[^}]*width: clamp\(6rem, 34vw, 10rem\);/);
+    assert.match(css, /\.random-reader-controls \.hero-control \.control-icon\s*\{\s*height: clamp\(40px, 12vw, 64px\);\s*width: clamp\(40px, 12vw, 64px\);\s*\}/);
+    // At a 320px viewport, both targets plus their gap fit inside the body padding.
+    const rem = 18, viewport = 320;
+    const controlWidth = Math.min(10 * rem, Math.max(6 * rem, viewport * 0.34));
+    const gap = Math.min(2 * rem, Math.max(rem, viewport * 0.04));
+    assert.ok(controlWidth >= 44);
+    assert.ok(2 * controlWidth + gap <= viewport - 2 * 1.25 * rem);
+});
+
+test("reusable wiggle has gentle configurable timing and opposite centered rotations", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const utility = css.match(/\.icon-wiggle\s*\{([^}]+)\}/)?.[1];
+    assert.ok(utility, "Shared wiggle utility must exist");
+    assert.match(utility, /animation-duration: var\(--icon-wiggle-duration, 800ms\);/);
+    assert.match(utility, /animation-iteration-count: infinite;/);
+    assert.match(utility, /animation-name: none;/);
+    assert.match(utility, /animation-timing-function: ease-in-out;/);
+    assert.match(utility, /rotate: none;/);
+    assert.match(utility, /transform-origin: center;/);
+    assert.doesNotMatch(utility, /(?:^|[;{])\s*transform:/);
+});
+
+test("wiggle splits one symmetric easing curve across neutral without a loop-seam pause", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    const keyframes = css.match(/@keyframes icon-wiggle\s*\{([\s\S]*?)\n\}/)?.[1];
+    assert.ok(keyframes, "Shared wiggle keyframes must exist");
+    const frames = new Map();
+    for (const [, offsets, body] of keyframes.matchAll(/([\d%,\s]+)\{([^}]+)\}/g)) {
+        const declarations = Object.fromEntries(body.trim().split(";").filter(s => s.trim()).map(s =>
+            s.trim().split(/\s*:\s*/)));
+        for (const offset of offsets.split(",")) frames.set(Number.parseFloat(offset), declarations);
+    }
+    assert.deepEqual([...frames.keys()].sort((a, b) => a - b), [0, 25, 75, 100]);
+    assert.equal(frames.get(0).rotate, "0deg");
+    assert.equal(frames.get(100).rotate, "0deg");
+    assert.equal(frames.get(25).rotate, "var(--icon-wiggle-angle, 6deg)");
+    assert.equal(frames.get(75).rotate, "calc(-1 * var(--icon-wiggle-angle, 6deg))");
+    assert.equal(frames.get(25)["animation-timing-function"] ?? "ease-in-out", "ease-in-out");
+    const curve = offset => {
+        const value = frames.get(offset)["animation-timing-function"] ?? "";
+        assert.match(value, /^cubic-bezier\([^)]+\)$/);
+        return value.slice(value.indexOf("(") + 1, -1).split(",").map(Number);
+    };
+    // De Casteljau split of ease-in-out (.42, 0, .58, 1) at its midpoint:
+    // equal-time quarters meet at nonzero velocity, with zero velocity at extrema.
+    assert.deepEqual(curve(0), [0.29, 0.5, 0.58, 1]);
+    assert.deepEqual(curve(75), [0.42, 0, 0.71, 0.5]);
+});
+
+test("wiggle resets at idle and activates only on native press or fine-pointer hover without reduced motion", () => {
+    const css = readFileSync(new URL("../assets/css/style.css", import.meta.url), "utf8");
+    assert.match(css, /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*\.icon-wiggle:active,\s*\.icon-control:active \.icon-wiggle\s*\{\s*animation-name: icon-wiggle;\s*\}\s*\}/);
+    assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*\.icon-wiggle:hover,\s*\.icon-control:hover \.icon-wiggle\s*\{\s*animation-name: icon-wiggle;\s*\}\s*\}/);
+    assert.equal(css.match(/animation-name: icon-wiggle;/g)?.length, 2,
+        "No persistent selection, focus, or ungated hover may start wiggle");
+    assert.doesNotMatch(css, /icon-wiggle[^{]*\{[^}]*animation-play-state:/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.icon-wiggle\s*\{\s*animation: none;\s*rotate: none;\s*\}/);
+    // Existing growth suppression and independent scale are covered above.
+});
+
+test("only the two decorative random-reader link icons wiggle; arrow circles keep spinning", () => {
+    for (const kind of ["haiku", "story"]) {
+        const markup = readFileSync(new URL(`../content/${kind}/_random.md`, import.meta.url), "utf8");
+        assert.match(markup, new RegExp(`<a id="${kind}-link" class="icon-control hero-control" hidden>\\s*<span class="control-icon icon-link icon-wiggle" aria-hidden="true"></span>\\s*<span>Link to this ${kind}</span>\\s*</a>`));
+        assert.equal(markup.match(/\bicon-wiggle\b/g)?.length, 1);
+        assert.equal(markup.match(/class="control-icon icon-arrowcircle icon-spin"/g)?.length, 1);
+    }
+    for (const path of ["../index.md", "../_layouts/default.html", "../haiku.md", "../story.md"]) {
+        assert.doesNotMatch(readFileSync(new URL(path, import.meta.url), "utf8"), /icon-wiggle/);
     }
 });
