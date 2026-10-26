@@ -68,6 +68,12 @@ async function readHaiku(targets, random = 0, options = {}) {
             assert.equal(init.mode, "same-origin");
             assert.equal(init.redirect, "error");
             assert.equal(button.disabled, true);
+            assert.equal(status.hidden, true);
+            assert.equal(status.textContent, "");
+            if (fetched.length === 1) {
+                assert.deepEqual(host.children, [], "Initial writing stays blank until success");
+                assert.equal(link.hidden, true);
+            }
             if (options.beforeResponse) await options.beforeResponse();
             if (options.networkFailure) throw new Error("Offline");
             return {
@@ -104,11 +110,12 @@ test("empty list reports no published writing and does not fetch", async () => {
     assert.equal(link.hidden, true);
     assert.equal(link.href, undefined);
     await button.click();
+    assert.equal(status.hidden, false);
     assert.match(status.textContent, /No published/);
     assert.deepEqual(fetched, []);
 });
 
-test("one target imports the authored article and clears loading without navigation", async () => {
+test("one target imports the authored article with hidden status and no navigation", async () => {
     for (const random of [0, 0.5, 0.999999]) {
         const { fetched, status, host, button, link } = await readHaiku([`/preview/${kind}/only`], random);
         assert.deepEqual(fetched, [`https://pelgish.ink/preview/${kind}/only`]);
@@ -193,7 +200,8 @@ test("new writing button fetches again in place and ignores overlapping requests
     const pending = button.click();
     assert.equal(button.disabled, true);
     assert.equal(button.hidden, false);
-    assert.match(status.textContent, /Loading/);
+    assert.equal(status.hidden, true);
+    assert.equal(status.textContent, "");
     await button.click();
     assert.equal(fetched.length, 2, "Initial fetch and one click, not the overlapping click");
     assert.equal(host.children[0], previous, "Keep current writing until the next is ready");
@@ -202,6 +210,7 @@ test("new writing button fetches again in place and ignores overlapping requests
     await pending;
     assert.equal(button.disabled, false);
     assert.equal(status.hidden, true);
+    assert.equal(status.textContent, "");
     assert.notEqual(host.children[0], previous);
     assert.notEqual(link.href, previousLink);
     assert.equal(link.href, fetched[1]);
@@ -259,6 +268,7 @@ test("self and external targets fail without fetching or navigating", async () =
         "javascript:alert(1)", "file:///story"]) {
         const { fetched, status } = await readHaiku([target]);
         assert.deepEqual(fetched, []);
+        assert.equal(status.hidden, false);
         assert.match(status.textContent, /Unable to load/);
     }
 

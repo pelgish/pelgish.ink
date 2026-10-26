@@ -24,10 +24,11 @@
     async function loadWriting() {
         if (button.disabled) return;
         button.disabled = true;
-        status.hidden = false;
-        status.textContent = `Loading a ${kind}…`;
+        status.hidden = true;
+        status.textContent = "";
         try {
             if (choices.length === 0) {
+                status.hidden = false;
                 status.textContent = `No published ${plural} are available yet.`;
                 return;
             }
@@ -70,6 +71,7 @@
             status.hidden = true;
         } catch {
             // Leave the latest writing intact while announcing a recoverable failure.
+            status.hidden = false;
             status.textContent = `Unable to load a ${kind}. Please try the Get a new ${kind} button again.`;
         } finally {
             button.disabled = false;
