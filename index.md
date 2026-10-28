@@ -1,8 +1,13 @@
 ---
 layout: default
-title: pelgish.ink
+title: Pelgish Ink
 permalink: /
 ---
+
+<div style="text-align: center">
+    Creative works by Connor Shugg
+</div>
+<br>
 
 <section class="home-controls" aria-label="Explore writing">
     <a class="icon-control" href="{{ '/story' | relative_url }}" aria-label="Short Stories" title="Read short stories">
